@@ -1,0 +1,16 @@
+[package]
+name = "rlox"
+version = "0.1.0"
+authors = ["Josh Chase <josh@jec.pw>"]
+edition = "2018"
+
+[dependencies]
+lazy_static = "1.1.0"
+
+[[bin]]
+name = "rlox"
+path = "src/bin/rlox.rs"
+
+[lib]
+name = "rlox"
+path = "src/lib/lib.rs"
