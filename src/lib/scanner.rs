@@ -8,11 +8,12 @@ use std::{
 
 #[derive(Debug)]
 pub struct Scanner {
-    source:  String,
-    tokens:  Vec<Token>,
-    start:   usize,
-    current: usize,
-    line:    usize,
+    source:   String,
+    tokens:   Vec<Token>,
+    start:    usize,
+    current:  usize,
+    line:     usize,
+    reporter: Reporter,
 }
 
 lazy_static! {
@@ -48,10 +49,11 @@ impl Scanner {
             start: 0,
             current: 0,
             line: 1,
+            reporter: Default::default(),
         }
     }
 
-    pub fn scan_tokens(mut self) -> Vec<Token> {
+    pub fn scan_tokens(mut self) -> Result<Vec<Token>, Errors> {
         while !self.is_at_end() {
             self.start = self.current;
             self.scan_token();
@@ -64,7 +66,9 @@ impl Scanner {
             self.line,
         ));
 
-        self.tokens
+        self.reporter.finish()?;
+
+        Ok(self.tokens)
     }
 
     fn is_at_end(&self) -> bool {
@@ -117,10 +121,12 @@ impl Scanner {
             b'"' => self.string(),
             c if is_digit(c) => self.number(),
             c if is_alpha(c) => self.identifier(),
-            c => error(
-                self.line,
-                &format!("unexpected character: {:?}", c as char),
-            ),
+            c => {
+                self.reporter.report(LoxError::scan(
+                    self.line,
+                    format!("unexpected character: {:?}", c as char),
+                ));
+            },
         }
     }
 
@@ -163,7 +169,8 @@ impl Scanner {
         }
 
         if self.is_at_end() {
-            error(self.line, "unterminated string");
+            self.reporter
+                .report(LoxError::scan(self.line, "unterminated string"));
             return;
         }
 

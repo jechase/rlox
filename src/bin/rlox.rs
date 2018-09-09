@@ -1,13 +1,14 @@
-use std::{
-    env,
-    process,
+use std::env;
+
+use failure::{
+    format_err,
+    Error,
 };
 
-fn main() {
+fn main() -> Result<(), Error> {
     let mut args = env::args();
     if args.len() > 2 {
-        println!("Usage: rlox [script]");
-        process::exit(64);
+        return Err(format_err!("Usage: rlox [script]"));
     } else if args.len() == 2 {
         rlox::run_file(args.nth(1).unwrap())
     } else {
