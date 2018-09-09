@@ -56,18 +56,22 @@ pub enum TokenType {
 #[derive(Clone, Debug)]
 pub struct Token {
     ty:      TokenType,
-    lexeme:  String,
+    lexeme:  LoxStr,
     literal: Value,
     line:    usize,
 }
 
 impl Token {
-    pub fn new(
+    pub fn new<S>(
         ty: TokenType,
-        lexeme: String,
+        lexeme: S,
         literal: Value,
         line: usize,
-    ) -> Token {
+    ) -> Token
+    where
+        S: Into<LoxStr>,
+    {
+        let lexeme = lexeme.into();
         Token {
             ty,
             lexeme,

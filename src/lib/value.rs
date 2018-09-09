@@ -1,6 +1,8 @@
+use crate::LoxStr;
+
 #[derive(Debug, Clone)]
 pub enum Value {
     Nil,
-    String(String),
+    String(LoxStr),
     Number(f64),
 }

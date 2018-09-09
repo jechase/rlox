@@ -8,6 +8,7 @@ edition = "2018"
 display_derive = "0.0.0"
 failure = "0.1.2"
 lazy_static = "1.1.0"
+tendril = "0.4.0"
 
 [[bin]]
 name = "rlox"

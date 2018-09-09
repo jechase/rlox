@@ -15,6 +15,8 @@ use self::{
 
 use failure::Error;
 
+type LoxStr = tendril::StrTendril;
+
 use std::{
     fs::read_to_string,
     io::{
@@ -50,12 +52,16 @@ pub fn run_prompt() -> Result<(), Error> {
 }
 
 pub fn run(source: &str) -> Result<(), Error> {
-    let scanner = Scanner::new(source.into());
-    let tokens = scanner.scan_tokens()?;
+    let scanner = Scanner::new(source);
 
-    for token in tokens {
-        println!("{:?}", token);
+    let mut reporter = Reporter::default();
+
+    for token in scanner {
+        match token {
+            Ok(tok) => println!("{:?}", tok),
+            Err(e) => reporter.report(e),
+        }
     }
 
-    Ok(())
+    reporter.finish().map_err(From::from)
 }
