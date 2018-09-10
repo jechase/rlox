@@ -6,6 +6,8 @@ use std::{
     str::FromStr,
 };
 
+use lazy_static::lazy_static;
+
 #[derive(Debug)]
 pub struct Scanner {
     source:       LoxStr,

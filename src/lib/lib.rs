@@ -1,13 +1,17 @@
-#[macro_use]
-extern crate lazy_static;
+#![recursion_limit = "512"]
 
+mod ast;
 mod error;
+mod print_ast;
 mod scanner;
 mod token;
 mod value;
 
+#[allow(unused_imports)]
 use self::{
+    ast::*,
     error::*,
+    print_ast::*,
     scanner::*,
     token::*,
     value::*,
