@@ -2,6 +2,7 @@
 
 mod ast;
 mod error;
+mod parser;
 mod print_ast;
 mod scanner;
 mod token;
@@ -11,6 +12,7 @@ mod value;
 use self::{
     ast::*,
     error::*,
+    parser::*,
     print_ast::*,
     scanner::*,
     token::*,
@@ -56,15 +58,19 @@ pub fn run_prompt() -> Result<(), Error> {
 }
 
 pub fn run(source: &str) -> Result<(), Error> {
-    let scanner = Scanner::new(source);
-
     let mut reporter = Reporter::default();
+    let scanner = Scanner::new(source).filter_map(|res| match res {
+        Ok(t) => Some(t),
+        Err(e) => {
+            reporter.report(e);
+            None
+        },
+    });
+    let mut parser = Parser::new(scanner);
 
-    for token in scanner {
-        match token {
-            Ok(tok) => println!("{:?}", tok),
-            Err(e) => reporter.report(e),
-        }
+    match parser.parse() {
+        Ok(expr) => println!("{}", AstPrinter.visit(&expr)),
+        Err(e) => reporter.report(e),
     }
 
     reporter.finish().map_err(From::from)

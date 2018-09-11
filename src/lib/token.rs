@@ -55,10 +55,10 @@ pub enum TokenType {
 
 #[derive(Clone, Debug)]
 pub struct Token {
-    ty:      TokenType,
-    lexeme:  LoxStr,
-    literal: Value,
-    line:    usize,
+    pub ty:      TokenType,
+    pub lexeme:  LoxStr,
+    pub literal: Value,
+    pub line:    usize,
 }
 
 impl Token {

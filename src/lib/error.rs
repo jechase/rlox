@@ -10,6 +10,8 @@ use std::fmt::{
     Display,
 };
 
+use crate::*;
+
 #[derive(Default, Debug)]
 pub struct Reporter {
     errors: Vec<Error>,
@@ -64,6 +66,22 @@ impl LoxError {
         LoxError {
             line,
             loc: "".into(),
+            msg: msg.into(),
+        }
+    }
+
+    pub fn parse<S>(token: &Token, msg: S) -> LoxError
+    where
+        S: Into<String>,
+    {
+        let loc = if token.ty == TokenType::Eof {
+            " at end".into()
+        } else {
+            format!(" at {:?}", token.lexeme)
+        };
+        LoxError {
+            line: token.line,
+            loc,
             msg: msg.into(),
         }
     }

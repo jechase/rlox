@@ -5,4 +5,5 @@ pub enum Value {
     Nil,
     String(LoxStr),
     Number(f64),
+    Bool(bool),
 }
