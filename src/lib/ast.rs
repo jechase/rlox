@@ -24,3 +24,8 @@ where
         (*self).visit(expr)
     }
 }
+
+pub enum Stmt {
+    Expr(Expr),
+    Print(Expr),
+}
