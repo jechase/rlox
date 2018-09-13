@@ -22,8 +22,32 @@ where
         }
     }
 
-    pub fn parse(&mut self) -> Result<Expr, LoxError> {
-        self.expression()
+    pub fn parse(&mut self) -> Option<Result<Stmt, LoxError>> {
+        if self.is_at_end() {
+            return None;
+        }
+
+        Some(self.statement())
+    }
+
+    fn statement(&mut self) -> Result<Stmt, LoxError> {
+        if self.is_match(&[TokenType::Print]) {
+            self.print_statement()
+        } else {
+            self.expression_statement()
+        }
+    }
+
+    fn print_statement(&mut self) -> Result<Stmt, LoxError> {
+        let value = self.expression()?;
+        self.consume(TokenType::Semicolon, "Expect ';' after value")?;
+        Ok(Stmt::Print(value))
+    }
+
+    fn expression_statement(&mut self) -> Result<Stmt, LoxError> {
+        let value = self.expression()?;
+        self.consume(TokenType::Semicolon, "Expect ';' after expression")?;
+        Ok(Stmt::Expr(value))
     }
 
     fn expression(&mut self) -> Result<Expr, LoxError> {
@@ -178,5 +202,16 @@ where
 
     fn previous(&self) -> &Token {
         self.prev.as_ref().unwrap()
+    }
+}
+
+impl<S> Iterator for Parser<S>
+where
+    S: Iterator<Item = Token>,
+{
+    type Item = Result<Stmt, LoxError>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.parse()
     }
 }

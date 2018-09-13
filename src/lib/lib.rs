@@ -65,8 +65,7 @@ pub fn run(source: &str) -> Result<(), Error> {
 
     let scanner = scanner_reporter.filter(Scanner::new(source));
 
-    let parser =
-        parser_reporter.filter(Some(Parser::new(scanner).parse()).into_iter());
+    let parser = parser_reporter.filter(Parser::new(scanner));
 
     let exprs: Vec<_> = parser.collect();
 
