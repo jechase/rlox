@@ -191,6 +191,9 @@ where
     }
 
     fn is_at_end(&self) -> bool {
+        if let Some(TokenType::Eof) = self.next.as_ref().map(|t| t.ty) {
+            return true;
+        }
         self.next.is_none()
     }
 
