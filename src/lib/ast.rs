@@ -25,6 +25,7 @@ where
     }
 }
 
+#[derive(Debug)]
 pub enum Stmt {
     Expr(Expr),
     Print(Expr),

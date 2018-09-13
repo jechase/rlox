@@ -7,8 +7,8 @@ impl Interpreter {
         self.visit(expr)
     }
 
-    pub fn interpret(&mut self, expr: &Expr) -> Result<Value, LoxError> {
-        self.evaluate(expr)
+    pub fn execute(&mut self, stmt: &Stmt) -> Result<(), LoxError> {
+        self.visit(stmt)
     }
 }
 
@@ -113,4 +113,19 @@ fn number_operands(
     right: Value,
 ) -> Result<(f64, f64), LoxError> {
     Ok((number_operand(op, left)?, number_operand(op, right)?))
+}
+
+impl Visitor<Stmt> for Interpreter {
+    type Output = Result<(), LoxError>;
+    fn visit(&mut self, stmt: &Stmt) -> Self::Output {
+        match stmt {
+            Stmt::Print(expr) => {
+                println!("{}", self.evaluate(expr)?);
+            },
+            Stmt::Expr(expr) => {
+                self.evaluate(expr)?;
+            },
+        }
+        Ok(())
+    }
 }

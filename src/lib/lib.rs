@@ -67,15 +67,15 @@ pub fn run(source: &str) -> Result<(), Error> {
 
     let parser = parser_reporter.filter(Parser::new(scanner));
 
-    let exprs: Vec<_> = parser.collect();
+    let stmts: Vec<_> = parser.collect();
 
     scanner_reporter.join(parser_reporter);
     scanner_reporter.finish()?;
 
     let mut interpreter = Interpreter;
 
-    for expr in exprs {
-        println!("{}", interpreter.interpret(&expr)?);
+    for stmt in stmts {
+        interpreter.execute(&stmt)?;
     }
 
     Ok(())
