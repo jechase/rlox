@@ -45,9 +45,8 @@ where
     }
 
     fn var_declaration(&mut self) -> Result<Stmt, LoxError> {
-        let name = self
-            .consume(TokenType::Identifier, "expect variable name")?
-            .clone();
+        let name =
+            self.consume(TokenType::Identifier, "expect variable name")?;
 
         let init = if self.is_match(&[TokenType::Equal]) {
             self.expression()?
@@ -91,7 +90,7 @@ where
         let mut expr = self.comparison()?;
 
         while self.is_match(&[TokenType::BangEqual, TokenType::EqualEqual]) {
-            let op = self.previous().to_owned();
+            let op = self.previous();
             let right = self.expression()?;
             expr = Expr::Binary(Box::new(expr), op, Box::new(right))
         }
@@ -108,7 +107,7 @@ where
             TokenType::Less,
             TokenType::LessEqual,
         ]) {
-            let op = self.previous().to_owned();
+            let op = self.previous();
             let right = self.expression()?;
             expr = Expr::Binary(expr.into(), op, right.into());
         }
@@ -120,7 +119,7 @@ where
         let mut expr = self.multiplication()?;
 
         while self.is_match(&[TokenType::Plus, TokenType::Minus]) {
-            let op = self.previous().to_owned();
+            let op = self.previous();
             let right = self.expression()?;
             expr = Expr::Binary(expr.into(), op, right.into());
         }
@@ -132,7 +131,7 @@ where
         let mut expr = self.unary()?;
 
         while self.is_match(&[TokenType::Slash, TokenType::Star]) {
-            let op = self.previous().to_owned();
+            let op = self.previous();
             let right = self.expression()?;
             expr = Expr::Binary(expr.into(), op, right.into());
         }
@@ -142,7 +141,7 @@ where
 
     fn unary(&mut self) -> Result<Expr, LoxError> {
         if self.is_match(&[TokenType::Bang, TokenType::Minus]) {
-            let op = self.previous().to_owned();
+            let op = self.previous();
             let right = self.unary()?;
             return Ok(Expr::Unary(op, right.into()));
         }
@@ -158,19 +157,19 @@ where
         } else if self.is_match(&[TokenType::Nil]) {
             Expr::Literal(Value::Nil)
         } else if self.is_match(&[TokenType::Number, TokenType::String]) {
-            Expr::Literal(self.previous().literal.to_owned())
+            Expr::Literal(self.previous().literal)
         } else if self.is_match(&[TokenType::LeftParen]) {
             let expr = self.expression()?;
             self.consume(TokenType::RightParen, "expect ) after expression.")?;
             Expr::Grouping(expr.into())
         } else if self.is_match(&[TokenType::Identifier]) {
-            Expr::Variable(self.previous().clone())
+            Expr::Variable(self.previous())
         } else {
             return Err(LoxError::parse(self.peek(), "expect expression"));
         })
     }
 
-    fn consume<T>(&mut self, ty: TokenType, msg: T) -> Result<&Token, LoxError>
+    fn consume<T>(&mut self, ty: TokenType, msg: T) -> Result<Token, LoxError>
     where
         T: Into<String>,
     {
@@ -232,14 +231,14 @@ where
         self.next.is_none()
     }
 
-    fn advance(&mut self) -> &Token {
+    fn advance(&mut self) -> Token {
         self.prev = self.next.take();
         self.next = self.scanner.next();
         self.previous()
     }
 
-    fn previous(&self) -> &Token {
-        self.prev.as_ref().unwrap()
+    fn previous(&self) -> Token {
+        self.prev.as_ref().unwrap().clone()
     }
 }
 

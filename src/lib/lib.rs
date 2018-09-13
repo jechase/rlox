@@ -1,4 +1,5 @@
 #![recursion_limit = "512"]
+#![feature(transpose_result)]
 
 mod ast;
 mod environment;
