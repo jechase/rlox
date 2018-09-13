@@ -6,6 +6,7 @@ pub enum Expr {
     Grouping(Box<Expr>),
     Literal(Value),
     Unary(Token, Box<Expr>),
+    Variable(Token),
 }
 
 pub trait Visitor<T> {
@@ -29,4 +30,5 @@ where
 pub enum Stmt {
     Expr(Expr),
     Print(Expr),
+    Var(Token, Expr),
 }

@@ -1,6 +1,9 @@
 use crate::*;
 
-pub struct Interpreter;
+#[derive(Default)]
+pub struct Interpreter {
+    environment: Environment,
+}
 
 impl Interpreter {
     pub fn evaluate(&mut self, expr: &Expr) -> Result<Value, LoxError> {
@@ -88,6 +91,16 @@ impl Visitor<Expr> for Interpreter {
                     },
                 }
             },
+            Expr::Variable(name) => self
+                .environment
+                .get(&name.lexeme)
+                .ok_or_else(|| {
+                    LoxError::runtime(
+                        name,
+                        format!("Undefined variable: {}", name.lexeme),
+                    )
+                })?
+                .to_owned(),
         })
     }
 }
@@ -124,6 +137,10 @@ impl Visitor<Stmt> for Interpreter {
             },
             Stmt::Expr(expr) => {
                 self.evaluate(expr)?;
+            },
+            Stmt::Var(name, expr) => {
+                let value = self.evaluate(expr)?;
+                self.environment.define(name, value);
             },
         }
         Ok(())

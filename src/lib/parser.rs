@@ -27,7 +27,40 @@ where
             return None;
         }
 
-        Some(self.statement())
+        Some(self.declaration())
+    }
+
+    fn declaration(&mut self) -> Result<Stmt, LoxError> {
+        let result = if self.is_match(&[TokenType::Var]) {
+            self.var_declaration()
+        } else {
+            self.statement()
+        };
+
+        if result.is_err() {
+            self.synchronize();
+        }
+
+        result
+    }
+
+    fn var_declaration(&mut self) -> Result<Stmt, LoxError> {
+        let name = self
+            .consume(TokenType::Identifier, "expect variable name")?
+            .clone();
+
+        let init = if self.is_match(&[TokenType::Equal]) {
+            self.expression()?
+        } else {
+            Expr::Literal(Value::Nil)
+        };
+
+        self.consume(
+            TokenType::Semicolon,
+            "expect ';' after variable declaration",
+        )?;
+
+        Ok(Stmt::Var(name, init))
     }
 
     fn statement(&mut self) -> Result<Stmt, LoxError> {
@@ -130,6 +163,8 @@ where
             let expr = self.expression()?;
             self.consume(TokenType::RightParen, "expect ) after expression.")?;
             Expr::Grouping(expr.into())
+        } else if self.is_match(&[TokenType::Identifier]) {
+            Expr::Variable(self.previous().clone())
         } else {
             return Err(LoxError::parse(self.peek(), "expect expression"));
         })

@@ -1,6 +1,7 @@
 #![recursion_limit = "512"]
 
 mod ast;
+mod environment;
 mod error;
 mod interpreter;
 mod parser;
@@ -12,6 +13,7 @@ mod value;
 #[allow(unused_imports)]
 use self::{
     ast::*,
+    environment::*,
     error::*,
     interpreter::*,
     parser::*,
@@ -72,7 +74,7 @@ pub fn run(source: &str) -> Result<(), Error> {
     scanner_reporter.join(parser_reporter);
     scanner_reporter.finish()?;
 
-    let mut interpreter = Interpreter;
+    let mut interpreter = Interpreter::default();
 
     for stmt in stmts {
         interpreter.execute(&stmt)?;
