@@ -20,6 +20,11 @@ impl Visitor<Expr> for Interpreter {
 
     fn visit(&mut self, expr: Expr) -> Self::Output {
         Ok(match expr {
+            Expr::Assign(name, value) => {
+                let value = self.evaluate(*value)?;
+                self.environment.define(&name, value.clone());
+                value
+            },
             Expr::Literal(v) => v,
             Expr::Grouping(e) => return self.evaluate(*e),
             Expr::Unary(op, right) => {
