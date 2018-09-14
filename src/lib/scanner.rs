@@ -84,43 +84,43 @@ impl Scanner {
             self.start = self.current;
             let ch = self.advance();
             let token = match ch {
-                '(' => self.build_token(TokenType::LeftParen, None),
-                ')' => self.build_token(TokenType::RightParen, None),
-                '{' => self.build_token(TokenType::LeftBrace, None),
-                '}' => self.build_token(TokenType::RightBrace, None),
-                ',' => self.build_token(TokenType::Comma, None),
-                '.' => self.build_token(TokenType::Dot, None),
-                '-' => self.build_token(TokenType::Minus, None),
-                '+' => self.build_token(TokenType::Plus, None),
-                ';' => self.build_token(TokenType::Semicolon, None),
-                '*' => self.build_token(TokenType::Star, None),
+                '(' => self.build_token(TokenType::LeftParen, Value::Nil),
+                ')' => self.build_token(TokenType::RightParen, Value::Nil),
+                '{' => self.build_token(TokenType::LeftBrace, Value::Nil),
+                '}' => self.build_token(TokenType::RightBrace, Value::Nil),
+                ',' => self.build_token(TokenType::Comma, Value::Nil),
+                '.' => self.build_token(TokenType::Dot, Value::Nil),
+                '-' => self.build_token(TokenType::Minus, Value::Nil),
+                '+' => self.build_token(TokenType::Plus, Value::Nil),
+                ';' => self.build_token(TokenType::Semicolon, Value::Nil),
+                '*' => self.build_token(TokenType::Star, Value::Nil),
                 '!' if self.peek() == '=' => {
                     self.advance();
-                    self.build_token(TokenType::BangEqual, None)
+                    self.build_token(TokenType::BangEqual, Value::Nil)
                 },
-                '!' => self.build_token(TokenType::Bang, None),
+                '!' => self.build_token(TokenType::Bang, Value::Nil),
                 '=' if self.peek() == '=' => {
                     self.advance();
-                    self.build_token(TokenType::EqualEqual, None)
+                    self.build_token(TokenType::EqualEqual, Value::Nil)
                 },
-                '=' => self.build_token(TokenType::Equal, None),
+                '=' => self.build_token(TokenType::Equal, Value::Nil),
                 '>' if self.peek() == '=' => {
                     self.advance();
-                    self.build_token(TokenType::GreaterEqual, None)
+                    self.build_token(TokenType::GreaterEqual, Value::Nil)
                 },
-                '>' => self.build_token(TokenType::Greater, None),
+                '>' => self.build_token(TokenType::Greater, Value::Nil),
                 '<' if self.peek() == '=' => {
                     self.advance();
-                    self.build_token(TokenType::LessEqual, None)
+                    self.build_token(TokenType::LessEqual, Value::Nil)
                 },
-                '<' => self.build_token(TokenType::Less, None),
+                '<' => self.build_token(TokenType::Less, Value::Nil),
                 '/' if self.peek() == '/' => {
                     while self.peek() != '\n' && !self.is_at_end() {
                         self.advance();
                     }
                     continue;
                 },
-                '/' => self.build_token(TokenType::Slash, None),
+                '/' => self.build_token(TokenType::Slash, Value::Nil),
                 ' ' | '\t' | '\r' => continue,
                 '\n' => {
                     self.line += 1;
@@ -148,12 +148,12 @@ impl Scanner {
 
     fn build_token<V>(&mut self, ty: TokenType, literal: V) -> Token
     where
-        V: Into<Option<Value>>,
+        V: Into<Value>,
     {
         let text = self
             .source
             .subtendril(self.start as u32, (self.current - self.start) as u32);
-        let literal = literal.into().unwrap_or(Value::Nil);
+        let literal = literal.into();
         Token::new(ty, text, literal, self.line)
     }
 
@@ -219,7 +219,7 @@ impl Scanner {
         let ty =
             RESERVED_WORDS.get(text).cloned().unwrap_or(TokenType::Identifier);
 
-        self.build_token(ty, None)
+        self.build_token(ty, Value::Nil)
     }
 }
 
