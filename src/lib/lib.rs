@@ -42,30 +42,40 @@ where
     P: AsRef<Path>,
 {
     let contents = read_to_string(path)?;
-    run(&contents)
+    run(&mut Interpreter::default(), &contents, scan)
 }
 
 pub fn run_prompt() -> Result<(), Error> {
     let mut stdin = io::BufReader::new(io::stdin());
     let mut stdout = io::stdout();
 
+    let mut interpreter = Interpreter::default();
+
     let mut line = String::new();
     loop {
         write!(stdout, "> ")?;
         stdout.flush()?;
         stdin.read_line(&mut line)?;
-        if let Err(e) = run(&line) {
+        if let Err(e) = run(&mut interpreter, &line, scan) {
             println!("{}", e);
         }
         line.clear();
     }
 }
 
-pub fn run(source: &str) -> Result<(), Error> {
+pub fn run<F, I>(
+    interpreter: &mut Interpreter,
+    source: &str,
+    scan: F,
+) -> Result<(), Error>
+where
+    F: Fn(&str) -> I,
+    I: Iterator<Item = Result<Token, LoxError>>,
+{
     let mut scanner_reporter = Reporter::new();
     let mut parser_reporter = Reporter::new();
 
-    let scanner = scanner_reporter.filter(Scanner::new(source));
+    let scanner = scanner_reporter.filter(scan(source));
 
     let parser = parser_reporter.filter(Parser::new(scanner));
 
@@ -73,8 +83,6 @@ pub fn run(source: &str) -> Result<(), Error> {
 
     scanner_reporter.join(parser_reporter);
     scanner_reporter.finish()?;
-
-    let mut interpreter = Interpreter::default();
 
     for stmt in stmts {
         interpreter.execute(&stmt)?;

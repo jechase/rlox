@@ -242,3 +242,7 @@ fn is_alpha(c: char) -> bool {
 fn is_alpha_numeric(c: char) -> bool {
     is_digit(c) || is_alpha(c)
 }
+
+pub fn scan(input: &str) -> impl Iterator<Item = Result<Token, LoxError>> {
+    Scanner::new(input)
+}
