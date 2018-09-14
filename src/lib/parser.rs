@@ -65,9 +65,23 @@ where
     fn statement(&mut self) -> Result<Stmt, LoxError> {
         if self.is_match(&[TokenType::Print]) {
             self.print_statement()
+        } else if self.is_match(&[TokenType::LeftBrace]) {
+            Ok(Stmt::Block(self.block()?))
         } else {
             self.expression_statement()
         }
+    }
+
+    fn block(&mut self) -> Result<Vec<Stmt>, LoxError> {
+        let mut stmts = vec![];
+
+        while !self.check(&[TokenType::RightBrace]) && !self.is_at_end() {
+            stmts.push(self.declaration()?);
+        }
+
+        self.consume(TokenType::RightBrace, "expect '}' after block.")?;
+
+        Ok(stmts)
     }
 
     fn print_statement(&mut self) -> Result<Stmt, LoxError> {
@@ -225,16 +239,20 @@ where
     }
 
     fn is_match(&mut self, types: &[TokenType]) -> bool {
-        if self.is_at_end() {
-            return false;
-        }
-        let tok_type = self.peek().ty;
-        if types.contains(&tok_type) {
+        if self.check(types) {
             self.advance();
             true
         } else {
             false
         }
+    }
+
+    fn check(&self, types: &[TokenType]) -> bool {
+        if self.is_at_end() {
+            return false;
+        }
+        let tok_type = self.peek().ty;
+        types.contains(&tok_type)
     }
 
     fn peek(&self) -> &Token {

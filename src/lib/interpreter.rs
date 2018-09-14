@@ -1,5 +1,7 @@
 use crate::*;
 
+use std::mem::replace;
+
 #[derive(Default)]
 pub struct Interpreter {
     environment: Environment,
@@ -137,6 +139,9 @@ impl Visitor<Stmt> for Interpreter {
     type Output = Result<(), LoxError>;
     fn visit(&mut self, stmt: Stmt) -> Self::Output {
         match stmt {
+            Stmt::Block(stmts) => {
+                self.execute_block(stmts)?;
+            },
             Stmt::Print(expr) => {
                 println!("{}", self.evaluate(expr)?);
             },
@@ -149,5 +154,35 @@ impl Visitor<Stmt> for Interpreter {
             },
         }
         Ok(())
+    }
+}
+
+impl Interpreter {
+    fn execute_block(&mut self, stmts: Vec<Stmt>) -> Result<(), LoxError> {
+        self.with_env(
+            |e| Environment::child(e),
+            move |interp| {
+                stmts.into_iter().fold(Ok(()), |acc, stmt| {
+                    acc.and_then(|_| interp.execute(stmt))
+                })
+            },
+        )
+    }
+
+    fn with_env<E, F>(&mut self, env_builder: E, f: F) -> Result<(), LoxError>
+    where
+        E: FnOnce(Environment) -> Environment,
+        F: FnOnce(&mut Interpreter) -> Result<(), LoxError>,
+    {
+        self.environment =
+            env_builder(replace(&mut self.environment, Default::default()));
+
+        let res = f(self);
+
+        self.environment = replace(&mut self.environment, Default::default())
+            .into_parent()
+            .unwrap();
+
+        res
     }
 }
