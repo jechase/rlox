@@ -63,13 +63,31 @@ where
     }
 
     fn statement(&mut self) -> Result<Stmt, LoxError> {
-        if self.is_match(&[TokenType::Print]) {
+        if self.is_match(&[TokenType::If]) {
+            self.if_statement()
+        } else if self.is_match(&[TokenType::Print]) {
             self.print_statement()
         } else if self.is_match(&[TokenType::LeftBrace]) {
             Ok(Stmt::Block(self.block()?))
         } else {
             self.expression_statement()
         }
+    }
+
+    fn if_statement(&mut self) -> Result<Stmt, LoxError> {
+        self.consume(TokenType::LeftParen, "expect '(' after 'if'.")?;
+        let cond = self.expression()?;
+        self.consume(TokenType::RightParen, "expect '(' after 'if'.")?;
+
+        let then = self.statement()?;
+
+        let otherwise = if self.is_match(&[TokenType::Else]) {
+            Some(self.statement()?)
+        } else {
+            None
+        };
+
+        Ok(Stmt::If(cond, then.into(), otherwise.map(From::from)))
     }
 
     fn block(&mut self) -> Result<Vec<Stmt>, LoxError> {
@@ -101,7 +119,7 @@ where
     }
 
     fn assignment(&mut self) -> Result<Expr, LoxError> {
-        let expr = self.equality()?;
+        let expr = self.or()?;
 
         if self.is_match(&[TokenType::Equal]) {
             let equals = self.previous();
@@ -112,6 +130,34 @@ where
             }
 
             return Err(LoxError::parse(&equals, "Invalid assignment target."));
+        }
+
+        Ok(expr)
+    }
+
+    fn or(&mut self) -> Result<Expr, LoxError> {
+        let mut expr = self.and()?;
+
+        while self.is_match(&[TokenType::Or]) {
+            let op = self.previous();
+
+            let right = self.and()?;
+
+            expr = Expr::Logical(expr.into(), op, right.into());
+        }
+
+        Ok(expr)
+    }
+
+    fn and(&mut self) -> Result<Expr, LoxError> {
+        let mut expr = self.equality()?;
+
+        while self.is_match(&[TokenType::And]) {
+            let op = self.previous();
+
+            let right = self.equality()?;
+
+            expr = Expr::Logical(expr.into(), op, right.into());
         }
 
         Ok(expr)

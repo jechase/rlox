@@ -28,12 +28,21 @@ impl Visitor<Expr> for Interpreter {
                 value
             },
             Expr::Literal(v) => v,
+            Expr::Logical(left, op, right) => {
+                let left = self.evaluate(*left)?;
+
+                match op.ty {
+                    TokenType::And if is_truthy(&left) => left,
+                    TokenType::Or if is_truthy(&left) => left,
+                    _ => self.evaluate(*right)?,
+                }
+            },
             Expr::Grouping(e) => return self.evaluate(*e),
             Expr::Unary(op, right) => {
                 let right = self.evaluate(*right)?;
                 match op.ty {
                     TokenType::Minus => Value::Number(-*right.number()?),
-                    TokenType::Bang => Value::Bool(!is_truthy(right)),
+                    TokenType::Bang => Value::Bool(!is_truthy(&right)),
                     _ => unreachable!(),
                 }
             },
@@ -112,10 +121,10 @@ impl Visitor<Expr> for Interpreter {
     }
 }
 
-fn is_truthy(v: Value) -> bool {
+fn is_truthy(v: &Value) -> bool {
     match v {
         Value::Nil => false,
-        Value::Bool(b) => b,
+        Value::Bool(b) => *b,
         _ => true,
     }
 }
@@ -142,11 +151,18 @@ impl Visitor<Stmt> for Interpreter {
             Stmt::Block(stmts) => {
                 self.execute_block(stmts)?;
             },
-            Stmt::Print(expr) => {
-                println!("{}", self.evaluate(expr)?);
-            },
             Stmt::Expr(expr) => {
                 self.evaluate(expr)?;
+            },
+            Stmt::If(cond, then, otherwise) => {
+                if is_truthy(&self.evaluate(cond)?) {
+                    self.execute(*then)?;
+                } else if let Some(otherwise) = otherwise {
+                    self.execute(*otherwise)?;
+                }
+            },
+            Stmt::Print(expr) => {
+                println!("{}", self.evaluate(expr)?);
             },
             Stmt::Var(name, expr) => {
                 let value = self.evaluate(expr)?;

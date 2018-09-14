@@ -1,1 +1,7 @@
-print 5;
+var a = 5;
+var c = (5 < 10) and (a == 5);
+if (c) {
+    print "yes";
+} else {
+    print "no";
+}
