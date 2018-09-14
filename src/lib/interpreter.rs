@@ -6,11 +6,11 @@ pub struct Interpreter {
 }
 
 impl Interpreter {
-    pub fn evaluate(&mut self, expr: &Expr) -> Result<Value, LoxError> {
+    pub fn evaluate(&mut self, expr: Expr) -> Result<Value, LoxError> {
         self.visit(expr)
     }
 
-    pub fn execute(&mut self, stmt: &Stmt) -> Result<(), LoxError> {
+    pub fn execute(&mut self, stmt: Stmt) -> Result<(), LoxError> {
         self.visit(stmt)
     }
 }
@@ -18,12 +18,12 @@ impl Interpreter {
 impl Visitor<Expr> for Interpreter {
     type Output = Result<Value, LoxError>;
 
-    fn visit(&mut self, expr: &Expr) -> Self::Output {
+    fn visit(&mut self, expr: Expr) -> Self::Output {
         Ok(match expr {
-            Expr::Literal(v) => v.to_owned(),
-            Expr::Grouping(e) => return self.evaluate(e),
+            Expr::Literal(v) => v,
+            Expr::Grouping(e) => return self.evaluate(*e),
             Expr::Unary(op, right) => {
-                let right = self.evaluate(right)?;
+                let right = self.evaluate(*right)?;
                 match op.ty {
                     TokenType::Minus => Value::Number(-*right.number()?),
                     TokenType::Bang => Value::Bool(!is_truthy(right)),
@@ -31,20 +31,20 @@ impl Visitor<Expr> for Interpreter {
                 }
             },
             Expr::Binary(left, op, right) => {
-                let left = self.evaluate(left)?;
-                let right = self.evaluate(right)?;
+                let left = self.evaluate(*left)?;
+                let right = self.evaluate(*right)?;
 
                 match op.ty {
                     TokenType::Minus => {
-                        let (left, right) = number_operands(op, left, right)?;
+                        let (left, right) = number_operands(&op, left, right)?;
                         Value::Number(left - right)
                     },
                     TokenType::Slash => {
-                        let (left, right) = number_operands(op, left, right)?;
+                        let (left, right) = number_operands(&op, left, right)?;
                         Value::Number(left / right)
                     },
                     TokenType::Star => {
-                        let (left, right) = number_operands(op, left, right)?;
+                        let (left, right) = number_operands(&op, left, right)?;
                         Value::Number(left * right)
                     },
                     TokenType::Plus => {
@@ -60,32 +60,32 @@ impl Visitor<Expr> for Interpreter {
                             Value::String(left)
                         } else {
                             return Err(LoxError::runtime(
-                                op,
+                                &op,
                                 "requires two numbers or two strings",
                             ));
                         }
                     },
                     TokenType::Greater => {
-                        let (left, right) = number_operands(op, left, right)?;
+                        let (left, right) = number_operands(&op, left, right)?;
                         Value::Bool(left > right)
                     },
                     TokenType::GreaterEqual => {
-                        let (left, right) = number_operands(op, left, right)?;
+                        let (left, right) = number_operands(&op, left, right)?;
                         Value::Bool(left >= right)
                     },
                     TokenType::Less => {
-                        let (left, right) = number_operands(op, left, right)?;
+                        let (left, right) = number_operands(&op, left, right)?;
                         Value::Bool(left < right)
                     },
                     TokenType::LessEqual => {
-                        let (left, right) = number_operands(op, left, right)?;
+                        let (left, right) = number_operands(&op, left, right)?;
                         Value::Bool(left <= right)
                     },
                     TokenType::BangEqual => Value::Bool(!is_equal(left, right)),
                     TokenType::EqualEqual => Value::Bool(is_equal(left, right)),
                     _ => {
                         return Err(LoxError::runtime(
-                            op,
+                            &op,
                             format!("unexpected token type: {:?}", op.ty),
                         ))
                     },
@@ -96,11 +96,11 @@ impl Visitor<Expr> for Interpreter {
                 .get(&name.lexeme)
                 .ok_or_else(|| {
                     LoxError::runtime(
-                        name,
+                        &name,
                         format!("Undefined variable: {}", name.lexeme),
                     )
                 })?
-                .to_owned(),
+                .clone(),
         })
     }
 }
@@ -130,7 +130,7 @@ fn number_operands(
 
 impl Visitor<Stmt> for Interpreter {
     type Output = Result<(), LoxError>;
-    fn visit(&mut self, stmt: &Stmt) -> Self::Output {
+    fn visit(&mut self, stmt: Stmt) -> Self::Output {
         match stmt {
             Stmt::Print(expr) => {
                 println!("{}", self.evaluate(expr)?);
@@ -140,7 +140,7 @@ impl Visitor<Stmt> for Interpreter {
             },
             Stmt::Var(name, expr) => {
                 let value = self.evaluate(expr)?;
-                self.environment.define(name, value);
+                self.environment.define(&name, value);
             },
         }
         Ok(())

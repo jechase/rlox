@@ -85,7 +85,7 @@ where
     scanner_reporter.finish()?;
 
     for stmt in stmts {
-        interpreter.execute(&stmt)?;
+        interpreter.execute(stmt)?;
     }
 
     Ok(())
