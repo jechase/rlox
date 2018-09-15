@@ -1,6 +1,6 @@
 use crate::*;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expr {
     Assign(Token, Box<Expr>),
     Binary(Box<Expr>, Token, Box<Expr>),
@@ -28,11 +28,12 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Stmt {
     Block(Vec<Stmt>),
     Expr(Expr),
     If(Expr, Box<Stmt>, Option<Box<Stmt>>),
     Print(Expr),
     Var(Token, Expr),
+    While(Expr, Box<Stmt>),
 }

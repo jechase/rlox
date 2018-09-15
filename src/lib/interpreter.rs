@@ -8,38 +8,38 @@ pub struct Interpreter {
 }
 
 impl Interpreter {
-    pub fn evaluate(&mut self, expr: Expr) -> Result<Value, LoxError> {
+    pub fn evaluate(&mut self, expr: &Expr) -> Result<Value, LoxError> {
         self.visit(expr)
     }
 
-    pub fn execute(&mut self, stmt: Stmt) -> Result<(), LoxError> {
+    pub fn execute(&mut self, stmt: &Stmt) -> Result<(), LoxError> {
         self.visit(stmt)
     }
 }
 
-impl Visitor<Expr> for Interpreter {
+impl<'a> Visitor<&'a Expr> for Interpreter {
     type Output = Result<Value, LoxError>;
 
-    fn visit(&mut self, expr: Expr) -> Self::Output {
+    fn visit(&mut self, expr: &'a Expr) -> Self::Output {
         Ok(match expr {
             Expr::Assign(name, value) => {
-                let value = self.evaluate(*value)?;
-                self.environment.define(&name, value.clone());
+                let value = self.evaluate(&*value)?;
+                self.environment.assign(&name, value.clone());
                 value
             },
-            Expr::Literal(v) => v,
+            Expr::Literal(v) => v.clone(),
             Expr::Logical(left, op, right) => {
-                let left = self.evaluate(*left)?;
+                let left = self.evaluate(&*left)?;
 
                 match op.ty {
-                    TokenType::And if is_truthy(&left) => left,
-                    TokenType::Or if is_truthy(&left) => left,
-                    _ => self.evaluate(*right)?,
+                    TokenType::And if is_truthy(&left) => left.clone(),
+                    TokenType::Or if is_truthy(&left) => left.clone(),
+                    _ => self.evaluate(&*right)?,
                 }
             },
-            Expr::Grouping(e) => return self.evaluate(*e),
+            Expr::Grouping(e) => return self.evaluate(e),
             Expr::Unary(op, right) => {
-                let right = self.evaluate(*right)?;
+                let right = self.evaluate(&*right)?;
                 match op.ty {
                     TokenType::Minus => Value::Number(-*right.number()?),
                     TokenType::Bang => Value::Bool(!is_truthy(&right)),
@@ -47,8 +47,8 @@ impl Visitor<Expr> for Interpreter {
                 }
             },
             Expr::Binary(left, op, right) => {
-                let left = self.evaluate(*left)?;
-                let right = self.evaluate(*right)?;
+                let left = self.evaluate(&*left)?;
+                let right = self.evaluate(&*right)?;
 
                 match op.ty {
                     TokenType::Minus => {
@@ -144,9 +144,9 @@ fn number_operands(
     Ok((number_operand(op, left)?, number_operand(op, right)?))
 }
 
-impl Visitor<Stmt> for Interpreter {
+impl<'a> Visitor<&'a Stmt> for Interpreter {
     type Output = Result<(), LoxError>;
-    fn visit(&mut self, stmt: Stmt) -> Self::Output {
+    fn visit(&mut self, stmt: &'a Stmt) -> Self::Output {
         match stmt {
             Stmt::Block(stmts) => {
                 self.execute_block(stmts)?;
@@ -156,9 +156,9 @@ impl Visitor<Stmt> for Interpreter {
             },
             Stmt::If(cond, then, otherwise) => {
                 if is_truthy(&self.evaluate(cond)?) {
-                    self.execute(*then)?;
+                    self.execute(&*then)?;
                 } else if let Some(otherwise) = otherwise {
-                    self.execute(*otherwise)?;
+                    self.execute(&*otherwise)?;
                 }
             },
             Stmt::Print(expr) => {
@@ -168,17 +168,22 @@ impl Visitor<Stmt> for Interpreter {
                 let value = self.evaluate(expr)?;
                 self.environment.define(&name, value);
             },
+            Stmt::While(cond, body) => {
+                while is_truthy(&self.evaluate(cond)?) {
+                    self.execute(&*body)?;
+                }
+            },
         }
         Ok(())
     }
 }
 
 impl Interpreter {
-    fn execute_block(&mut self, stmts: Vec<Stmt>) -> Result<(), LoxError> {
+    fn execute_block(&mut self, stmts: &Vec<Stmt>) -> Result<(), LoxError> {
         self.with_env(
             |e| Environment::child(e),
             move |interp| {
-                stmts.into_iter().fold(Ok(()), |acc, stmt| {
+                stmts.iter().fold(Ok(()), |acc, stmt| {
                     acc.and_then(|_| interp.execute(stmt))
                 })
             },

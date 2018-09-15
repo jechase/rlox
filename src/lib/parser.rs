@@ -65,13 +65,73 @@ where
     fn statement(&mut self) -> Result<Stmt, LoxError> {
         if self.is_match(&[TokenType::If]) {
             self.if_statement()
+        } else if self.is_match(&[TokenType::For]) {
+            self.for_statement()
         } else if self.is_match(&[TokenType::Print]) {
             self.print_statement()
+        } else if self.is_match(&[TokenType::While]) {
+            self.while_statement()
         } else if self.is_match(&[TokenType::LeftBrace]) {
             Ok(Stmt::Block(self.block()?))
         } else {
             self.expression_statement()
         }
+    }
+
+    fn for_statement(&mut self) -> Result<Stmt, LoxError> {
+        self.consume(TokenType::LeftParen, "expect '(' after 'for'")?;
+        let decl = if self.is_match(&[TokenType::Semicolon]) {
+            None
+        } else if self.is_match(&[TokenType::Var]) {
+            Some(self.var_declaration()?)
+        } else {
+            Some(Stmt::Expr(self.expression()?))
+        };
+
+        let cond = if !self.check(&[TokenType::Semicolon]) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+
+        self.consume(TokenType::Semicolon, "expect ';' after loop condition")?;
+
+        let inc = if !self.check(&[TokenType::RightParen]) {
+            Some(self.expression()?)
+        } else {
+            None
+        };
+
+        self.consume(TokenType::RightParen, "expect ')' after where clauses")?;
+
+        let mut body = self.statement()?;
+
+        if let Some(inc) = inc {
+            body = Stmt::Block(vec![body, Stmt::Expr(inc)]);
+        }
+
+        if let Some(cond) = cond {
+            body = Stmt::While(cond, body.into());
+        } else {
+            body = Stmt::While(Expr::Literal(Value::Bool(true)), body.into());
+        }
+
+        if let Some(decl) = decl {
+            body = Stmt::Block(vec![decl, body]);
+        }
+
+        Ok(body)
+    }
+
+    fn while_statement(&mut self) -> Result<Stmt, LoxError> {
+        self.consume(TokenType::LeftParen, "expect '(' after 'while'")?;
+        let cond = self.expression()?;
+        self.consume(
+            TokenType::RightParen,
+            "expect ')' after while condition",
+        )?;
+        let body = self.statement()?;
+        Ok(Stmt::While(cond, body.into()))
     }
 
     fn if_statement(&mut self) -> Result<Stmt, LoxError> {
