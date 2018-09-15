@@ -283,7 +283,45 @@ where
             return Ok(Expr::Unary(op, right.into()));
         }
 
-        self.primary()
+        self.call()
+    }
+
+    fn call(&mut self) -> Result<Expr, LoxError> {
+        let mut expr = self.primary()?;
+
+        loop {
+            if self.is_match(&[TokenType::LeftParen]) {
+                expr = self.finish_call(expr)?;
+            } else {
+                break;
+            }
+        }
+
+        Ok(expr)
+    }
+
+    fn finish_call(&mut self, callee: Expr) -> Result<Expr, LoxError> {
+        let mut args = vec![];
+
+        if !self.check(&[TokenType::RightParen]) {
+            loop {
+                if args.len() >= 8 {
+                    return Err(LoxError::parse(
+                        self.peek(),
+                        "cannot have more than 8 arguments",
+                    ));
+                }
+                args.push(self.expression()?);
+                if !self.is_match(&[TokenType::Comma]) {
+                    break;
+                }
+            }
+        }
+
+        let paren =
+            self.consume(TokenType::RightParen, "expect ')' after arguments")?;
+
+        Ok(Expr::Call(callee.into(), paren, args))
     }
 
     fn primary(&mut self) -> Result<Expr, LoxError> {

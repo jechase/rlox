@@ -1,17 +1,41 @@
 use crate::*;
 
-use display_derive::Display;
+use std::{
+    fmt,
+    rc::Rc,
+};
 
-#[derive(Debug, Clone, PartialEq, Display)]
+#[derive(Debug, Clone)]
 pub enum Value {
-    #[display(fmt = "nil")]
     Nil,
-    #[display(fmt = "{}", _0)]
     String(LoxStr),
-    #[display(fmt = "{}", _0)]
     Number(f64),
-    #[display(fmt = "{}", _0)]
     Bool(bool),
+    Callable(Rc<dyn Callable>),
+}
+
+impl PartialEq<Value> for Value {
+    fn eq(&self, right: &Value) -> bool {
+        match (self, right) {
+            (Value::Nil, Value::Nil) => true,
+            (Value::String(l), Value::String(r)) => l.eq(r),
+            (Value::Number(l), Value::Number(r)) => l.eq(r),
+            (Value::Bool(l), Value::Bool(r)) => l.eq(r),
+            _ => false,
+        }
+    }
+}
+
+impl fmt::Display for Value {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Value::Nil => write!(f, "nil"),
+            Value::String(v) => write!(f, "{}", v),
+            Value::Number(v) => write!(f, "{}", v),
+            Value::Bool(v) => write!(f, "{}", v),
+            Value::Callable(_) => write!(f, "<function>"),
+        }
+    }
 }
 
 macro_rules! cast_fn {
@@ -30,4 +54,5 @@ impl Value {
     cast_fn!(number, Number, f64);
     cast_fn!(boolean, Bool, bool);
     cast_fn!(string, String, LoxStr);
+    cast_fn!(callable, Callable, Rc<Callable>);
 }

@@ -27,25 +27,6 @@ impl<'a> Visitor<&'a Expr> for Interpreter {
                 self.environment.assign(&name, value.clone());
                 value
             },
-            Expr::Literal(v) => v.clone(),
-            Expr::Logical(left, op, right) => {
-                let left = self.evaluate(&*left)?;
-
-                match op.ty {
-                    TokenType::And if is_truthy(&left) => left.clone(),
-                    TokenType::Or if is_truthy(&left) => left.clone(),
-                    _ => self.evaluate(&*right)?,
-                }
-            },
-            Expr::Grouping(e) => return self.evaluate(e),
-            Expr::Unary(op, right) => {
-                let right = self.evaluate(&*right)?;
-                match op.ty {
-                    TokenType::Minus => Value::Number(-*right.number()?),
-                    TokenType::Bang => Value::Bool(!is_truthy(&right)),
-                    _ => unreachable!(),
-                }
-            },
             Expr::Binary(left, op, right) => {
                 let left = self.evaluate(&*left)?;
                 let right = self.evaluate(&*right)?;
@@ -105,6 +86,49 @@ impl<'a> Visitor<&'a Expr> for Interpreter {
                             format!("unexpected token type: {:?}", op.ty),
                         ))
                     },
+                }
+            },
+            Expr::Call(callee, paren, args) => {
+                let callee = self.evaluate(&*callee)?;
+
+                let args = args
+                    .into_iter()
+                    .map(|arg| self.evaluate(&arg))
+                    .collect::<Result<Vec<_>, _>>()?;
+
+                let function = callee.callable()?;
+
+                let n_args = args.len();
+                let arity = function.arity();
+                if n_args != arity {
+                    return Err(LoxError::runtime(
+                        paren,
+                        format!(
+                            "expected {} arguments but got {}",
+                            arity, n_args
+                        ),
+                    ));
+                }
+
+                function.call(self, args)?
+            },
+            Expr::Grouping(e) => return self.evaluate(e),
+            Expr::Literal(v) => v.clone(),
+            Expr::Logical(left, op, right) => {
+                let left = self.evaluate(&*left)?;
+
+                match op.ty {
+                    TokenType::And if is_truthy(&left) => left.clone(),
+                    TokenType::Or if is_truthy(&left) => left.clone(),
+                    _ => self.evaluate(&*right)?,
+                }
+            },
+            Expr::Unary(op, right) => {
+                let right = self.evaluate(&*right)?;
+                match op.ty {
+                    TokenType::Minus => Value::Number(-*right.number()?),
+                    TokenType::Bang => Value::Bool(!is_truthy(&right)),
+                    _ => unreachable!(),
                 }
             },
             Expr::Variable(name) => self

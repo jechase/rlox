@@ -1,6 +1,7 @@
 #![recursion_limit = "512"]
 
 mod ast;
+mod callable;
 mod environment;
 mod error;
 mod interpreter;
@@ -13,6 +14,7 @@ mod value;
 #[allow(unused_imports)]
 use self::{
     ast::*,
+    callable::*,
     environment::*,
     error::*,
     interpreter::*,
