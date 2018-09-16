@@ -1,10 +1,14 @@
 use crate::*;
 
-use std::mem::replace;
+use std::{
+    borrow::Borrow,
+    mem::swap,
+    time,
+};
 
-#[derive(Default)]
 pub struct Interpreter {
-    environment: Environment,
+    pub environment: ScopeMgr,
+    current:         Option<Index>,
 }
 
 impl Interpreter {
@@ -12,19 +16,45 @@ impl Interpreter {
         self.visit(expr)
     }
 
-    pub fn execute(&mut self, stmt: &Stmt) -> Result<(), LoxError> {
+    pub fn execute(&mut self, stmt: &Stmt) -> Result<Option<Value>, LoxError> {
         self.visit(stmt)
+    }
+
+    pub fn assign(
+        &mut self,
+        name: &Token,
+        value: Value,
+    ) -> Result<(), LoxError> {
+        let current = self.current;
+        if self.environment.assign(current, &name.lexeme, value).is_none() {
+            Err(LoxError::runtime(
+                name,
+                format!("variable {} is not defined", name.lexeme),
+            ))
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn define(&mut self, name: &Token, value: Value) {
+        let current = self.current;
+        self.environment.define(current, name.lexeme.clone(), value)
+    }
+
+    pub fn get_var(&mut self, name: &Token) -> Option<&Value> {
+        let current = self.current;
+        self.environment.get(current, &name.lexeme)
     }
 }
 
-impl<'a> Visitor<&'a Expr> for Interpreter {
+impl<'a, 's> Visitor<&'a Expr> for Interpreter {
     type Output = Result<Value, LoxError>;
 
     fn visit(&mut self, expr: &'a Expr) -> Self::Output {
         Ok(match expr {
             Expr::Assign(name, value) => {
                 let value = self.evaluate(&*value)?;
-                self.environment.assign(&name, value.clone());
+                self.assign(&name, value.clone())?;
                 value
             },
             Expr::Binary(left, op, right) => {
@@ -34,27 +64,29 @@ impl<'a> Visitor<&'a Expr> for Interpreter {
                 match op.ty {
                     TokenType::Minus => {
                         let (left, right) = number_operands(&op, left, right)?;
-                        Value::Number(left - right)
+                        Primitive::Number(left - right)
                     },
                     TokenType::Slash => {
                         let (left, right) = number_operands(&op, left, right)?;
-                        Value::Number(left / right)
+                        Primitive::Number(left / right)
                     },
                     TokenType::Star => {
                         let (left, right) = number_operands(&op, left, right)?;
-                        Value::Number(left * right)
+                        Primitive::Number(left * right)
                     },
                     TokenType::Plus => {
-                        if let (Ok(left), Ok(right)) =
-                            (left.number(), right.number())
-                        {
-                            Value::Number(left + right)
-                        } else if let (Ok(left), Ok(right)) =
-                            (left.string(), right.string())
-                        {
-                            let mut left = left.clone();
-                            left.push_tendril(right);
-                            Value::String(left)
+                        if let (Ok(left), Ok(right)) = (
+                            left.primitive().and_then(|p| p.number()),
+                            right.primitive().and_then(|p| p.number()),
+                        ) {
+                            Primitive::Number(left + right).into()
+                        } else if let (Ok(left), Ok(right)) = (
+                            left.primitive().and_then(|p| p.string()),
+                            right.primitive().and_then(|p| p.string()),
+                        ) {
+                            Primitive::String(
+                                (left.to_string() + right.borrow()).into(),
+                            )
                         } else {
                             return Err(LoxError::runtime(
                                 &op,
@@ -64,22 +96,26 @@ impl<'a> Visitor<&'a Expr> for Interpreter {
                     },
                     TokenType::Greater => {
                         let (left, right) = number_operands(&op, left, right)?;
-                        Value::Bool(left > right)
+                        Primitive::Bool(left > right).into()
                     },
                     TokenType::GreaterEqual => {
                         let (left, right) = number_operands(&op, left, right)?;
-                        Value::Bool(left >= right)
+                        Primitive::Bool(left >= right).into()
                     },
                     TokenType::Less => {
                         let (left, right) = number_operands(&op, left, right)?;
-                        Value::Bool(left < right)
+                        Primitive::Bool(left < right).into()
                     },
                     TokenType::LessEqual => {
                         let (left, right) = number_operands(&op, left, right)?;
-                        Value::Bool(left <= right)
+                        Primitive::Bool(left <= right).into()
                     },
-                    TokenType::BangEqual => Value::Bool(!is_equal(left, right)),
-                    TokenType::EqualEqual => Value::Bool(is_equal(left, right)),
+                    TokenType::BangEqual => {
+                        Primitive::Bool(!is_equal(left, right)).into()
+                    },
+                    TokenType::EqualEqual => {
+                        Primitive::Bool(is_equal(left, right)).into()
+                    },
                     _ => {
                         return Err(LoxError::runtime(
                             &op,
@@ -87,6 +123,7 @@ impl<'a> Visitor<&'a Expr> for Interpreter {
                         ))
                     },
                 }
+                .into()
             },
             Expr::Call(callee, paren, args) => {
                 let callee = self.evaluate(&*callee)?;
@@ -113,7 +150,7 @@ impl<'a> Visitor<&'a Expr> for Interpreter {
                 function.call(self, args)?
             },
             Expr::Grouping(e) => return self.evaluate(e),
-            Expr::Literal(v) => v.clone(),
+            Expr::Literal(v) => v.clone().into(),
             Expr::Logical(left, op, right) => {
                 let left = self.evaluate(&*left)?;
 
@@ -126,14 +163,16 @@ impl<'a> Visitor<&'a Expr> for Interpreter {
             Expr::Unary(op, right) => {
                 let right = self.evaluate(&*right)?;
                 match op.ty {
-                    TokenType::Minus => Value::Number(-*right.number()?),
-                    TokenType::Bang => Value::Bool(!is_truthy(&right)),
+                    TokenType::Minus => Primitive::Number(
+                        -*right.primitive().and_then(|p| p.number())?,
+                    ),
+                    TokenType::Bang => Primitive::Bool(!is_truthy(&right)),
                     _ => unreachable!(),
                 }
+                .into()
             },
             Expr::Variable(name) => self
-                .environment
-                .get(&name.lexeme)
+                .get_var(&name)
                 .ok_or_else(|| {
                     LoxError::runtime(
                         &name,
@@ -146,9 +185,9 @@ impl<'a> Visitor<&'a Expr> for Interpreter {
 }
 
 fn is_truthy(v: &Value) -> bool {
-    match v {
-        Value::Nil => false,
-        Value::Bool(b) => *b,
+    match v.primitive() {
+        Ok(Primitive::Nil) => false,
+        Ok(Primitive::Bool(b)) => *b,
         _ => true,
     }
 }
@@ -158,7 +197,10 @@ fn is_equal(left: Value, right: Value) -> bool {
 }
 
 fn number_operand(op: &Token, right: Value) -> Result<f64, LoxError> {
-    Ok(*right.number().map_err(|e| LoxError::runtime(op, format!("{}", e)))?)
+    Ok(*right
+        .primitive()
+        .and_then(|p| p.number())
+        .map_err(|e| LoxError::runtime(op, format!("{}", e)))?)
 }
 fn number_operands(
     op: &Token,
@@ -168,65 +210,110 @@ fn number_operands(
     Ok((number_operand(op, left)?, number_operand(op, right)?))
 }
 
-impl<'a> Visitor<&'a Stmt> for Interpreter {
-    type Output = Result<(), LoxError>;
+impl<'a, 's> Visitor<&'a Stmt> for Interpreter {
+    type Output = Result<Option<Value>, LoxError>;
     fn visit(&mut self, stmt: &'a Stmt) -> Self::Output {
         match stmt {
             Stmt::Block(stmts) => {
-                self.execute_block(stmts)?;
+                let new_env = self.environment.create_scope(self.current);
+                let res = self
+                    .with_env(new_env, |interp| interp.execute_block(stmts));
+                self.environment.destroy_scope(new_env);
+                return res;
             },
             Stmt::Expr(expr) => {
                 self.evaluate(expr)?;
             },
+            Stmt::Function(name, params, body) => {
+                self.define(
+                    name,
+                    Value::Callable(LoxFn::new(name, &*params, &*body).into()),
+                );
+            },
             Stmt::If(cond, then, otherwise) => {
                 if is_truthy(&self.evaluate(cond)?) {
-                    self.execute(&*then)?;
+                    return self.execute(&*then);
                 } else if let Some(otherwise) = otherwise {
-                    self.execute(&*otherwise)?;
+                    return self.execute(&*otherwise);
                 }
             },
             Stmt::Print(expr) => {
                 println!("{}", self.evaluate(expr)?);
             },
+            Stmt::Return(_, expr) => {
+                let value = self.evaluate(expr)?;
+
+                return Ok(Some(value));
+            },
             Stmt::Var(name, expr) => {
                 let value = self.evaluate(expr)?;
-                self.environment.define(&name, value);
+                self.define(&name, value);
             },
             Stmt::While(cond, body) => {
                 while is_truthy(&self.evaluate(cond)?) {
-                    self.execute(&*body)?;
+                    if let Some(ret) = self.execute(&*body)? {
+                        return Ok(Some(ret));
+                    }
                 }
             },
         }
-        Ok(())
+
+        Ok(None)
+    }
+}
+
+impl Default for Interpreter {
+    fn default() -> Interpreter {
+        Interpreter::new()
     }
 }
 
 impl Interpreter {
-    fn execute_block(&mut self, stmts: &Vec<Stmt>) -> Result<(), LoxError> {
-        self.with_env(
-            |e| Environment::child(e),
-            move |interp| {
-                stmts.iter().fold(Ok(()), |acc, stmt| {
-                    acc.and_then(|_| interp.execute(stmt))
+    fn new() -> Interpreter {
+        let mut interp = Interpreter {
+            environment: Default::default(),
+            current:     None,
+        };
+        interp.environment.define(
+            None,
+            "clock",
+            Value::Callable(
+                RustFn::new(0, |_, _| {
+                    Ok(Primitive::Number(
+                        time::SystemTime::now()
+                            .duration_since(time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs() as f64,
+                    )
+                    .into())
                 })
-            },
-        )
+                .into(),
+            ),
+        );
+        interp
+    }
+    pub fn execute_block(
+        &mut self,
+        stmts: &Vec<Stmt>,
+    ) -> Result<Option<Value>, LoxError> {
+        for stmt in stmts.iter() {
+            if let Some(ret) = self.execute(stmt)? {
+                return Ok(Some(ret));
+            }
+        }
+        Ok(None)
     }
 
-    fn with_env<E, F>(&mut self, env_builder: E, f: F) -> Result<(), LoxError>
+    pub fn with_env<F, T>(&mut self, env: Index, f: F) -> T
     where
-        E: FnOnce(Environment) -> Environment,
-        F: FnOnce(&mut Interpreter) -> Result<(), LoxError>,
+        F: FnOnce(&mut Interpreter) -> T,
     {
-        self.environment =
-            env_builder(replace(&mut self.environment, Default::default()));
+        let mut env = Some(env);
+        swap(&mut self.current, &mut env);
 
         let res = f(self);
 
-        self.environment = replace(&mut self.environment, Default::default())
-            .into_parent()
-            .unwrap();
+        swap(&mut self.current, &mut env);
 
         res
     }

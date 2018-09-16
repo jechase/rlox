@@ -1,13 +1,14 @@
-#![recursion_limit = "512"]
+#![feature(nll)]
+#![recursion_limit = "1024"]
 
 mod ast;
 mod callable;
-mod environment;
 mod error;
 mod interpreter;
 mod parser;
 mod print_ast;
 mod scanner;
+mod scope;
 mod token;
 mod value;
 
@@ -15,12 +16,12 @@ mod value;
 use self::{
     ast::*,
     callable::*,
-    environment::*,
     error::*,
     interpreter::*,
     parser::*,
     print_ast::*,
     scanner::*,
+    scope::*,
     token::*,
     value::*,
 };
@@ -44,7 +45,8 @@ where
     P: AsRef<Path>,
 {
     let contents = read_to_string(path)?;
-    run(&mut Interpreter::default(), &contents, scan)
+    let mut interpreter = Interpreter::default();
+    run(&mut interpreter, &contents)
 }
 
 pub fn run_prompt() -> Result<(), Error> {
@@ -58,22 +60,14 @@ pub fn run_prompt() -> Result<(), Error> {
         write!(stdout, "> ")?;
         stdout.flush()?;
         stdin.read_line(&mut line)?;
-        if let Err(e) = run(&mut interpreter, &line, scan) {
+        if let Err(e) = run(&mut interpreter, &line) {
             println!("{}", e);
         }
         line.clear();
     }
 }
 
-pub fn run<F, I>(
-    interpreter: &mut Interpreter,
-    source: &str,
-    scan: F,
-) -> Result<(), Error>
-where
-    F: Fn(&str) -> I,
-    I: Iterator<Item = Result<Token, LoxError>>,
-{
+pub fn run(interpreter: &mut Interpreter, source: &str) -> Result<(), Error> {
     let mut scanner_reporter = Reporter::new();
     let mut parser_reporter = Reporter::new();
 
@@ -87,7 +81,12 @@ where
     scanner_reporter.finish()?;
 
     for stmt in stmts {
-        interpreter.execute(&stmt)?;
+        match stmt {
+            Stmt::Expr(ref e) => println!("{}", interpreter.evaluate(e)?),
+            _ => {
+                interpreter.execute(&stmt)?;
+            },
+        }
     }
 
     Ok(())

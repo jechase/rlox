@@ -74,53 +74,48 @@ impl Scanner {
         loop {
             if self.is_at_end() {
                 self.eof_returned = true;
-                return Ok(Token::new(
-                    TokenType::Eof,
-                    "",
-                    Value::Nil,
-                    self.line,
-                ));
+                return Ok(Token::new(TokenType::Eof, "", (), self.line));
             }
             self.start = self.current;
             let ch = self.advance();
             let token = match ch {
-                '(' => self.build_token(TokenType::LeftParen, Value::Nil),
-                ')' => self.build_token(TokenType::RightParen, Value::Nil),
-                '{' => self.build_token(TokenType::LeftBrace, Value::Nil),
-                '}' => self.build_token(TokenType::RightBrace, Value::Nil),
-                ',' => self.build_token(TokenType::Comma, Value::Nil),
-                '.' => self.build_token(TokenType::Dot, Value::Nil),
-                '-' => self.build_token(TokenType::Minus, Value::Nil),
-                '+' => self.build_token(TokenType::Plus, Value::Nil),
-                ';' => self.build_token(TokenType::Semicolon, Value::Nil),
-                '*' => self.build_token(TokenType::Star, Value::Nil),
+                '(' => self.build_token(TokenType::LeftParen, ()),
+                ')' => self.build_token(TokenType::RightParen, ()),
+                '{' => self.build_token(TokenType::LeftBrace, ()),
+                '}' => self.build_token(TokenType::RightBrace, ()),
+                ',' => self.build_token(TokenType::Comma, ()),
+                '.' => self.build_token(TokenType::Dot, ()),
+                '-' => self.build_token(TokenType::Minus, ()),
+                '+' => self.build_token(TokenType::Plus, ()),
+                ';' => self.build_token(TokenType::Semicolon, ()),
+                '*' => self.build_token(TokenType::Star, ()),
                 '!' if self.peek() == '=' => {
                     self.advance();
-                    self.build_token(TokenType::BangEqual, Value::Nil)
+                    self.build_token(TokenType::BangEqual, ())
                 },
-                '!' => self.build_token(TokenType::Bang, Value::Nil),
+                '!' => self.build_token(TokenType::Bang, ()),
                 '=' if self.peek() == '=' => {
                     self.advance();
-                    self.build_token(TokenType::EqualEqual, Value::Nil)
+                    self.build_token(TokenType::EqualEqual, ())
                 },
-                '=' => self.build_token(TokenType::Equal, Value::Nil),
+                '=' => self.build_token(TokenType::Equal, ()),
                 '>' if self.peek() == '=' => {
                     self.advance();
-                    self.build_token(TokenType::GreaterEqual, Value::Nil)
+                    self.build_token(TokenType::GreaterEqual, ())
                 },
-                '>' => self.build_token(TokenType::Greater, Value::Nil),
+                '>' => self.build_token(TokenType::Greater, ()),
                 '<' if self.peek() == '=' => {
                     self.advance();
-                    self.build_token(TokenType::LessEqual, Value::Nil)
+                    self.build_token(TokenType::LessEqual, ())
                 },
-                '<' => self.build_token(TokenType::Less, Value::Nil),
+                '<' => self.build_token(TokenType::Less, ()),
                 '/' if self.peek() == '/' => {
                     while self.peek() != '\n' && !self.is_at_end() {
                         self.advance();
                     }
                     continue;
                 },
-                '/' => self.build_token(TokenType::Slash, Value::Nil),
+                '/' => self.build_token(TokenType::Slash, ()),
                 ' ' | '\t' | '\r' => continue,
                 '\n' => {
                     self.line += 1;
@@ -146,14 +141,11 @@ impl Scanner {
         current_char
     }
 
-    fn build_token<V>(&mut self, ty: TokenType, literal: V) -> Token
+    fn build_token<P>(&mut self, ty: TokenType, literal: P) -> Token
     where
-        V: Into<Value>,
+        P: Into<Primitive>,
     {
-        let text = self
-            .source
-            .subtendril(self.start as u32, (self.current - self.start) as u32);
-        let literal = literal.into();
+        let text = &self.source[self.start..self.current];
         Token::new(ty, text, literal, self.line)
     }
 
@@ -184,7 +176,7 @@ impl Scanner {
             (self.current - self.start) as u32 - 2,
         );
 
-        Ok(self.build_token(TokenType::String, Value::String(value)))
+        Ok(self.build_token(TokenType::String, Primitive::String(value.into())))
     }
 
     fn number(&mut self) -> Token {
@@ -203,7 +195,7 @@ impl Scanner {
         let text = self.source.get(self.start..self.current).unwrap();
         self.build_token(
             TokenType::Number,
-            Value::Number(
+            Primitive::Number(
                 f64::from_str(text).expect(&format!("parse float: {}", text)),
             ),
         )
@@ -219,7 +211,7 @@ impl Scanner {
         let ty =
             RESERVED_WORDS.get(text).cloned().unwrap_or(TokenType::Identifier);
 
-        self.build_token(ty, Value::Nil)
+        self.build_token(ty, ())
     }
 }
 

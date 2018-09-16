@@ -1,14 +1,16 @@
 use crate::*;
 
+use std::sync::Arc;
+
 #[derive(Debug, Clone)]
 pub enum Expr {
-    Assign(Token, Box<Expr>),
-    Binary(Box<Expr>, Token, Box<Expr>),
-    Call(Box<Expr>, Token, Vec<Expr>),
-    Grouping(Box<Expr>),
-    Literal(Value),
-    Logical(Box<Expr>, Token, Box<Expr>),
-    Unary(Token, Box<Expr>),
+    Assign(Token, Arc<Expr>),
+    Binary(Arc<Expr>, Token, Arc<Expr>),
+    Call(Arc<Expr>, Token, Vec<Expr>),
+    Grouping(Arc<Expr>),
+    Literal(Primitive),
+    Logical(Arc<Expr>, Token, Arc<Expr>),
+    Unary(Token, Arc<Expr>),
     Variable(Token),
 }
 
@@ -33,8 +35,10 @@ where
 pub enum Stmt {
     Block(Vec<Stmt>),
     Expr(Expr),
-    If(Expr, Box<Stmt>, Option<Box<Stmt>>),
+    Function(Token, Vec<Token>, Vec<Stmt>),
+    If(Expr, Arc<Stmt>, Option<Arc<Stmt>>),
     Print(Expr),
+    Return(Token, Expr),
     Var(Token, Expr),
-    While(Expr, Box<Stmt>),
+    While(Expr, Arc<Stmt>),
 }

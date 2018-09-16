@@ -1,4 +1,8 @@
+<<<<<<< HEAD
+use std::fmt;
+=======
 use crate::*;
+>>>>>>> ec35dfa... Functions
 
 use std::{
     fmt::{
@@ -19,15 +23,19 @@ pub trait Callable: Debug + Display {
     fn arity(&self) -> usize;
 }
 
+<<<<<<< HEAD
+impl fmt::Debug for Callable {
+=======
 pub struct RustFn<F>(pub usize, pub F);
 
-impl<F> Display for RustFn<F> {
+impl<F> Debug for RustFn<F> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<native fn>")
+        write!(f, "RustFn")
     }
 }
 
-impl<F> Debug for RustFn<F> {
+impl<F> Display for RustFn<F> {
+>>>>>>> ec35dfa... Functions
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "<native fn>")
     }

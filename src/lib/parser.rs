@@ -1,5 +1,7 @@
 use crate::*;
 
+use std::sync::Arc;
+
 pub struct Parser<S>
 where
     S: Iterator<Item = Token>,
@@ -31,7 +33,9 @@ where
     }
 
     fn declaration(&mut self) -> Result<Stmt, LoxError> {
-        let result = if self.is_match(&[TokenType::Var]) {
+        let result = if self.is_match(&[TokenType::Fun]) {
+            self.function("function")
+        } else if self.is_match(&[TokenType::Var]) {
             self.var_declaration()
         } else {
             self.statement()
@@ -44,14 +48,59 @@ where
         result
     }
 
+    fn function(&mut self, kind: &str) -> Result<Stmt, LoxError> {
+        let name = self
+            .consume(TokenType::Identifier, format!("expect {} name", kind))?
+            .clone();
+        self.consume(
+            TokenType::LeftParen,
+            format!("expect '(' after {} name", kind),
+        )?;
+
+        let mut params = vec![];
+        if !self.check(&[TokenType::RightParen]) {
+            loop {
+                if params.len() >= 8 {
+                    return Err(LoxError::runtime(
+                        self.peek(),
+                        "cannot have more than 8 paramters",
+                    ));
+                }
+
+                params.push(
+                    self.consume(
+                        TokenType::Identifier,
+                        "expect parameter name",
+                    )?
+                    .clone(),
+                );
+
+                if !self.is_match(&[TokenType::Comma]) {
+                    break;
+                }
+            }
+        }
+        self.consume(TokenType::RightParen, "expect ')' after parameters")?;
+
+        self.consume(
+            TokenType::LeftBrace,
+            format!("expect '{{' before {} body", kind),
+        )?;
+
+        let body = self.block()?;
+
+        Ok(Stmt::Function(name, params, body))
+    }
+
     fn var_declaration(&mut self) -> Result<Stmt, LoxError> {
-        let name =
-            self.consume(TokenType::Identifier, "expect variable name")?;
+        let name = self
+            .consume(TokenType::Identifier, "expect variable name")?
+            .clone();
 
         let init = if self.is_match(&[TokenType::Equal]) {
             self.expression()?
         } else {
-            Expr::Literal(Value::Nil)
+            Expr::Literal(Primitive::Nil)
         };
 
         self.consume(
@@ -69,6 +118,8 @@ where
             self.for_statement()
         } else if self.is_match(&[TokenType::Print]) {
             self.print_statement()
+        } else if self.is_match(&[TokenType::Return]) {
+            self.return_statement()
         } else if self.is_match(&[TokenType::While]) {
             self.while_statement()
         } else if self.is_match(&[TokenType::LeftBrace]) {
@@ -76,6 +127,20 @@ where
         } else {
             self.expression_statement()
         }
+    }
+
+    fn return_statement(&mut self) -> Result<Stmt, LoxError> {
+        let keyword = self.previous().clone();
+
+        let expr = if !self.is_match(&[TokenType::Semicolon]) {
+            self.expression()?
+        } else {
+            Expr::Literal(().into())
+        };
+
+        self.consume(TokenType::Semicolon, "expect ';' after return value")?;
+
+        Ok(Stmt::Return(keyword, expr))
     }
 
     fn for_statement(&mut self) -> Result<Stmt, LoxError> {
@@ -113,7 +178,8 @@ where
         if let Some(cond) = cond {
             body = Stmt::While(cond, body.into());
         } else {
-            body = Stmt::While(Expr::Literal(Value::Bool(true)), body.into());
+            body =
+                Stmt::While(Expr::Literal(Primitive::Bool(true)), body.into());
         }
 
         if let Some(decl) = decl {
@@ -182,7 +248,7 @@ where
         let expr = self.or()?;
 
         if self.is_match(&[TokenType::Equal]) {
-            let equals = self.previous();
+            let equals = self.previous().clone();
             let value = self.assignment()?;
 
             if let Expr::Variable(name) = expr {
@@ -199,7 +265,7 @@ where
         let mut expr = self.and()?;
 
         while self.is_match(&[TokenType::Or]) {
-            let op = self.previous();
+            let op = self.previous().clone();
 
             let right = self.and()?;
 
@@ -213,7 +279,7 @@ where
         let mut expr = self.equality()?;
 
         while self.is_match(&[TokenType::And]) {
-            let op = self.previous();
+            let op = self.previous().clone();
 
             let right = self.equality()?;
 
@@ -227,9 +293,9 @@ where
         let mut expr = self.comparison()?;
 
         while self.is_match(&[TokenType::BangEqual, TokenType::EqualEqual]) {
-            let op = self.previous();
+            let op = self.previous().clone();
             let right = self.expression()?;
-            expr = Expr::Binary(Box::new(expr), op, Box::new(right))
+            expr = Expr::Binary(Arc::new(expr), op, Arc::new(right))
         }
 
         Ok(expr)
@@ -244,7 +310,7 @@ where
             TokenType::Less,
             TokenType::LessEqual,
         ]) {
-            let op = self.previous();
+            let op = self.previous().clone();
             let right = self.expression()?;
             expr = Expr::Binary(expr.into(), op, right.into());
         }
@@ -256,7 +322,7 @@ where
         let mut expr = self.multiplication()?;
 
         while self.is_match(&[TokenType::Plus, TokenType::Minus]) {
-            let op = self.previous();
+            let op = self.previous().clone();
             let right = self.expression()?;
             expr = Expr::Binary(expr.into(), op, right.into());
         }
@@ -268,7 +334,7 @@ where
         let mut expr = self.unary()?;
 
         while self.is_match(&[TokenType::Slash, TokenType::Star]) {
-            let op = self.previous();
+            let op = self.previous().clone();
             let right = self.expression()?;
             expr = Expr::Binary(expr.into(), op, right.into());
         }
@@ -278,7 +344,7 @@ where
 
     fn unary(&mut self) -> Result<Expr, LoxError> {
         if self.is_match(&[TokenType::Bang, TokenType::Minus]) {
-            let op = self.previous();
+            let op = self.previous().clone();
             let right = self.unary()?;
             return Ok(Expr::Unary(op, right.into()));
         }
@@ -321,30 +387,30 @@ where
         let paren =
             self.consume(TokenType::RightParen, "expect ')' after arguments")?;
 
-        Ok(Expr::Call(callee.into(), paren, args))
+        Ok(Expr::Call(callee.into(), paren.clone(), args))
     }
 
     fn primary(&mut self) -> Result<Expr, LoxError> {
         Ok(if self.is_match(&[TokenType::False]) {
-            Expr::Literal(Value::Bool(false))
+            Expr::Literal(Primitive::Bool(false))
         } else if self.is_match(&[TokenType::True]) {
-            Expr::Literal(Value::Bool(true))
+            Expr::Literal(Primitive::Bool(true))
         } else if self.is_match(&[TokenType::Nil]) {
-            Expr::Literal(Value::Nil)
+            Expr::Literal(Primitive::Nil)
         } else if self.is_match(&[TokenType::Number, TokenType::String]) {
-            Expr::Literal(self.previous().literal)
+            Expr::Literal(self.previous().literal.clone())
         } else if self.is_match(&[TokenType::LeftParen]) {
             let expr = self.expression()?;
             self.consume(TokenType::RightParen, "expect ) after expression.")?;
             Expr::Grouping(expr.into())
         } else if self.is_match(&[TokenType::Identifier]) {
-            Expr::Variable(self.previous())
+            Expr::Variable(self.previous().clone())
         } else {
             return Err(LoxError::parse(self.peek(), "expect expression"));
         })
     }
 
-    fn consume<T>(&mut self, ty: TokenType, msg: T) -> Result<Token, LoxError>
+    fn consume<T>(&mut self, ty: TokenType, msg: T) -> Result<&Token, LoxError>
     where
         T: Into<String>,
     {
@@ -410,14 +476,14 @@ where
         self.next.is_none()
     }
 
-    fn advance(&mut self) -> Token {
+    fn advance(&mut self) -> &Token {
         self.prev = self.next.take();
         self.next = self.scanner.next();
         self.previous()
     }
 
-    fn previous(&self) -> Token {
-        self.prev.as_ref().unwrap().clone()
+    fn previous(&self) -> &Token {
+        self.prev.as_ref().unwrap()
     }
 }
 
