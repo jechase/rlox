@@ -28,8 +28,6 @@ use self::{
 
 use failure::Error;
 
-type LoxStr = tendril::StrTendril;
-
 use std::{
     fs::read_to_string,
     io::{
@@ -39,6 +37,10 @@ use std::{
     },
     path::Path,
 };
+
+use tendril::StrTendril;
+
+type LoxStr = StrTendril;
 
 pub fn run_file<P>(path: P) -> Result<(), Error>
 where

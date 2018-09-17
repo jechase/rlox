@@ -20,7 +20,7 @@ impl From<Primitive> for Value {
 #[derive(Debug, Clone)]
 pub enum Primitive {
     Nil,
-    String(String),
+    String(LoxStr),
     Number(f64),
     Bool(bool),
 }
@@ -31,8 +31,8 @@ impl From<()> for Primitive {
     }
 }
 
-impl From<String> for Primitive {
-    fn from(other: String) -> Self {
+impl From<LoxStr> for Primitive {
+    fn from(other: LoxStr) -> Self {
         Primitive::String(other)
     }
 }
@@ -105,7 +105,7 @@ macro_rules! cast_fn {
 impl Primitive {
     cast_fn!(number, Primitive, Number, f64);
     cast_fn!(boolean, Primitive, Bool, bool);
-    cast_fn!(string, Primitive, String, String);
+    cast_fn!(string, Primitive, String, LoxStr);
 }
 
 impl Value {

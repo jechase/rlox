@@ -145,7 +145,9 @@ impl Scanner {
     where
         P: Into<Primitive>,
     {
-        let text = &self.source[self.start..self.current];
+        let text = self
+            .source
+            .subtendril(self.start as u32, (self.current - self.start) as u32);
         Token::new(ty, text, literal, self.line)
     }
 
@@ -176,7 +178,7 @@ impl Scanner {
             (self.current - self.start) as u32 - 2,
         );
 
-        Ok(self.build_token(TokenType::String, Primitive::String(value.into())))
+        Ok(self.build_token(TokenType::String, Primitive::String(value)))
     }
 
     fn number(&mut self) -> Token {

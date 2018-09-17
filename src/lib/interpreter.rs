@@ -1,7 +1,6 @@
 use crate::*;
 
 use std::{
-    borrow::Borrow,
     mem::swap,
     time,
 };
@@ -80,13 +79,14 @@ impl<'a, 's> Visitor<&'a Expr> for Interpreter {
                             right.primitive().and_then(|p| p.number()),
                         ) {
                             Primitive::Number(left + right).into()
-                        } else if let (Ok(left), Ok(right)) = (
-                            left.primitive().and_then(|p| p.string()),
+                        } else if let (Ok(mut left), Ok(right)) = (
+                            left.primitive()
+                                .and_then(|p| p.string())
+                                .map(Clone::clone),
                             right.primitive().and_then(|p| p.string()),
                         ) {
-                            Primitive::String(
-                                (left.to_string() + right.borrow()).into(),
-                            )
+                            left.push_tendril(right);
+                            Primitive::String(left).into()
                         } else {
                             return Err(LoxError::runtime(
                                 &op,
@@ -202,6 +202,7 @@ fn number_operand(op: &Token, right: Value) -> Result<f64, LoxError> {
         .and_then(|p| p.number())
         .map_err(|e| LoxError::runtime(op, format!("{}", e)))?)
 }
+
 fn number_operands(
     op: &Token,
     left: Value,

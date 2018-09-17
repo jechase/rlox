@@ -8,7 +8,10 @@ use generational_arena::Arena;
 
 pub use generational_arena::Index;
 
-use crate::value::Value;
+use crate::{
+    value::Value,
+    LoxStr,
+};
 
 #[derive(Debug)]
 pub struct ScopeMgr {
@@ -24,7 +27,7 @@ impl Default for ScopeMgr {
 
 #[derive(Default, Debug)]
 pub struct Scope {
-    values:    HashMap<String, Value>,
+    values:    HashMap<LoxStr, Value>,
     enclosing: Option<Index>,
     children:  usize,
 }
@@ -73,20 +76,20 @@ impl ScopeMgr {
         let scope = if let Some(scope) = scope {
             scope
         } else {
-            return self.global.values.get(name.as_ref());
+            return self.global.values.get(name.as_ref().as_bytes());
         };
 
         let scope = &self.get_scope(scope);
 
         scope
             .values
-            .get(name.as_ref())
+            .get(name.as_ref().as_bytes())
             .or_else(|| self.get(scope.enclosing, name))
     }
 
     pub fn define<S>(&mut self, scope: Option<Index>, name: S, value: Value)
     where
-        S: Into<String>,
+        S: Into<LoxStr>,
     {
         let scope = if let Some(scope) = scope {
             scope
@@ -120,13 +123,16 @@ impl ScopeMgr {
         K: Hash + Eq + AsRef<str>,
     {
         if scope.is_none() {
-            return self.global.values.get_mut(name.as_ref());
+            return self.global.values.get_mut(name.as_ref().as_bytes());
         }
 
         let scope = scope.unwrap();
 
         if self.contains(Some(scope), name) {
-            return self.get_scope_mut(scope).values.get_mut(name.as_ref());
+            return self
+                .get_scope_mut(scope)
+                .values
+                .get_mut(name.as_ref().as_bytes());
         }
 
         self.get_mut(self.get_scope(scope).enclosing, name)
@@ -141,7 +147,7 @@ impl ScopeMgr {
             Some(idx) => self.get_scope(idx),
         }
         .values
-        .contains_key(name.as_ref())
+        .contains_key(name.as_ref().as_bytes())
     }
 
     fn get_scope(&self, scope: Index) -> &Scope {

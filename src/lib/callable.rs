@@ -35,9 +35,7 @@ impl<F> Debug for RustFn<F> {
 
 impl<F> RustFn<F>
 where
-    F: Fn(&mut Interpreter, Vec<Value>) -> Result<Value, LoxError>
-        + Send
-        + Sync,
+    F: Fn(&mut Interpreter, Vec<Value>) -> Result<Value, LoxError>,
 {
     pub fn new(arity: usize, f: F) -> RustFn<F> {
         RustFn(arity, f)
@@ -46,9 +44,7 @@ where
 
 impl<'c, F> Callable for RustFn<F>
 where
-    F: Fn(&mut Interpreter, Vec<Value>) -> Result<Value, LoxError>
-        + Send
-        + Sync,
+    F: Fn(&mut Interpreter, Vec<Value>) -> Result<Value, LoxError>,
 {
     fn call(
         &self,
@@ -65,10 +61,7 @@ where
 
 impl<'c, F> From<RustFn<F>> for Arc<dyn Callable>
 where
-    F: Fn(&mut Interpreter, Vec<Value>) -> Result<Value, LoxError>
-        + Send
-        + Sync
-        + 'static,
+    F: Fn(&mut Interpreter, Vec<Value>) -> Result<Value, LoxError> + 'static,
 {
     fn from(other: RustFn<F>) -> Arc<dyn Callable> {
         Arc::new(other) as Arc<_>
