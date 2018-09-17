@@ -6,8 +6,7 @@ use std::{
 };
 
 pub struct Interpreter {
-    pub environment: ScopeMgr,
-    current:         Option<Index>,
+    pub environment: Environment,
 }
 
 impl Interpreter {
@@ -24,8 +23,7 @@ impl Interpreter {
         name: &Token,
         value: Value,
     ) -> Result<(), LoxError> {
-        let current = self.current;
-        if self.environment.assign(current, &name.lexeme, value).is_none() {
+        if self.environment.assign(&name.lexeme, value).is_none() {
             Err(LoxError::runtime(
                 name,
                 format!("variable {} is not defined", name.lexeme),
@@ -36,13 +34,11 @@ impl Interpreter {
     }
 
     pub fn define(&mut self, name: &Token, value: Value) {
-        let current = self.current;
-        self.environment.define(current, name.lexeme.clone(), value)
+        self.environment.define(name.lexeme.clone(), value)
     }
 
-    pub fn get_var(&mut self, name: &Token) -> Option<&Value> {
-        let current = self.current;
-        self.environment.get(current, &name.lexeme)
+    pub fn get_var(&mut self, name: &Token) -> Option<Value> {
+        self.environment.get(&name.lexeme)
     }
 }
 
@@ -216,26 +212,26 @@ impl<'a, 's> Visitor<&'a Stmt> for Interpreter {
     fn visit(&mut self, stmt: &'a Stmt) -> Self::Output {
         match stmt {
             Stmt::Block(stmts) => {
-                let new_env = self.environment.create_scope(self.current);
+                let new_env = Environment::with_enclosing(&self.environment);
                 let res = self
                     .with_env(new_env, |interp| interp.execute_block(stmts));
-                self.environment.destroy_scope(new_env);
                 return res;
             },
             Stmt::Expr(expr) => {
                 self.evaluate(expr)?;
             },
-            Stmt::Function(name, params, body) => {
-                if let Some(scope) = self.current {
-                    self.environment.add_ref(scope);
-                }
-                self.define(
-                    name,
-                    Value::Callable(
-                        LoxFn::new(name, &*params, &*body, self.current).into(),
-                    ),
-                )
-            },
+            Stmt::Function(name, params, body) => self.define(
+                name,
+                Value::Callable(
+                    LoxFn::new(
+                        name,
+                        &*params,
+                        &*body,
+                        self.environment.clone(),
+                    )
+                    .into(),
+                ),
+            ),
             Stmt::If(cond, then, otherwise) => {
                 if is_truthy(&self.evaluate(cond)?) {
                     return self.execute(&*then);
@@ -277,11 +273,9 @@ impl Default for Interpreter {
 impl Interpreter {
     fn new() -> Interpreter {
         let mut interp = Interpreter {
-            environment: Default::default(),
-            current:     None,
+            environment: Environment::new(),
         };
         interp.environment.define(
-            None,
             "clock",
             Value::Callable(
                 RustFn::new(0, |_, _| {
@@ -310,16 +304,15 @@ impl Interpreter {
         Ok(None)
     }
 
-    pub fn with_env<F, T>(&mut self, env: Index, f: F) -> T
+    pub fn with_env<F, T>(&mut self, mut env: Environment, f: F) -> T
     where
         F: FnOnce(&mut Interpreter) -> T,
     {
-        let mut env = Some(env);
-        swap(&mut self.current, &mut env);
+        swap(&mut self.environment, &mut env);
 
         let res = f(self);
 
-        swap(&mut self.current, &mut env);
+        swap(&mut self.environment, &mut env);
 
         res
     }

@@ -73,7 +73,7 @@ pub struct LoxFn {
     name:    Token,
     params:  Vec<Token>,
     body:    Vec<Stmt>,
-    closure: Option<Index>,
+    closure: Environment,
 }
 
 impl Display for LoxFn {
@@ -93,7 +93,7 @@ impl LoxFn {
         name: &Token,
         params: &[Token],
         body: &[Stmt],
-        closure: Option<Index>,
+        closure: Environment,
     ) -> Self {
         LoxFn {
             name: name.clone(),
@@ -110,7 +110,7 @@ impl Callable for LoxFn {
         interp: &mut Interpreter,
         args: Vec<Value>,
     ) -> Result<Value, LoxError> {
-        let env = interp.environment.create_scope(self.closure);
+        let env = Environment::with_enclosing(&self.closure);
         let res = interp.with_env(env, |interp| {
             for (i, decl_param) in self.params.iter().enumerate() {
                 interp.define(decl_param, args[i].clone());
@@ -118,7 +118,6 @@ impl Callable for LoxFn {
 
             interp.execute_block(&self.body)
         });
-        interp.environment.destroy_scope(env);
         res.map(|opt| opt.unwrap_or(Primitive::Nil.into()))
     }
 

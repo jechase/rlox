@@ -1,7 +1,10 @@
 use std::{
+    cell::RefCell,
     collections::HashMap,
+    fmt,
     hash::Hash,
     mem::replace,
+    rc::Rc,
 };
 
 use generational_arena::Arena;
@@ -40,14 +43,9 @@ impl ScopeMgr {
         }
     }
     pub fn create_scope(&mut self, parent: Option<Index>) -> Index {
-        let parent = if let Some(scope) =
-            parent.and_then(|idx| self.scopes.get_mut(idx))
-        {
-            scope.children += 1;
-            parent
-        } else {
-            None
-        };
+        if let Some(parent) = parent {
+            self.add_ref(parent);
+        }
 
         let new_scope = Scope {
             enclosing: parent,
@@ -168,5 +166,122 @@ impl ScopeMgr {
         let scope = self.get_scope_mut(scope);
         scope.children -= 1;
         scope.children
+    }
+}
+
+pub struct Environment {
+    mgr:   Rc<RefCell<ScopeMgr>>,
+    scope: Option<Index>,
+}
+
+impl fmt::Debug for Environment {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if let Some(scope) = self.scope {
+            let mut env = f.debug_struct("Scope");
+            let mgr = self.mgr.borrow();
+            let scope = mgr.get_scope(scope);
+            env.field("values", &scope.values);
+            env.field("enclosing", &self.get_enclosing());
+            env
+        } else {
+            let mut env = f.debug_struct("Global");
+            env.field("values", &self.mgr.borrow().global.values);
+            env
+        }.finish()
+    }
+}
+
+impl Environment {
+    pub fn new() -> Self {
+        Environment {
+            mgr:   Rc::new(RefCell::new(ScopeMgr::default())),
+            scope: None,
+        }
+    }
+
+    pub fn with_enclosing(parent: &Environment) -> Self {
+        let mgr = parent.mgr.clone();
+        let scope = {
+            let mut mgr = mgr.borrow_mut();
+            Some(mgr.create_scope(parent.scope))
+        };
+
+        Environment {
+            mgr,
+            scope,
+        }
+    }
+
+    pub fn define<S>(&mut self, name: S, value: Value)
+    where
+        S: Into<LoxStr>,
+    {
+        self.mgr.borrow_mut().define(self.scope, name, value)
+    }
+
+    pub fn assign<K>(&mut self, name: &K, value: Value) -> Option<Value>
+    where
+        K: Hash + Eq + AsRef<str>,
+    {
+        self.mgr.borrow_mut().assign(self.scope, name, value)
+    }
+
+    pub fn get<K>(&self, name: &K) -> Option<Value>
+    where
+        K: Hash + Eq + AsRef<str>,
+    {
+        self.mgr.borrow().get(self.scope, name).cloned()
+    }
+    pub fn define_global<S>(&mut self, name: S, value: Value)
+    where
+        S: Into<LoxStr>,
+    {
+        self.mgr.borrow_mut().define(None, name, value)
+    }
+
+    pub fn assign_global<K>(&mut self, name: &K, value: Value) -> Option<Value>
+    where
+        K: Hash + Eq + AsRef<str>,
+    {
+        self.mgr.borrow_mut().assign(None, name, value)
+    }
+
+    pub fn get_global<K>(&self, name: &K) -> Option<Value>
+    where
+        K: Hash + Eq + AsRef<str>,
+    {
+        self.mgr.borrow().get(None, name).cloned()
+    }
+
+    pub fn get_enclosing(&self) -> Option<Environment> {
+        self.scope.map(|scope| {
+            let enclosing = self.mgr.borrow().get_scope(scope).enclosing;
+            Environment {
+                mgr:   self.mgr.clone(),
+                scope: enclosing,
+            }
+        })
+    }
+}
+
+impl Drop for Environment {
+    fn drop(&mut self) {
+        let mut mgr = self.mgr.borrow_mut();
+        if let Some(scope) = self.scope {
+            mgr.destroy_scope(scope);
+        }
+    }
+}
+
+impl Clone for Environment {
+    fn clone(&self) -> Environment {
+        if let Some(scope) = self.scope {
+            self.mgr.borrow_mut().add_ref(scope);
+        }
+
+        Environment {
+            mgr:   self.mgr.clone(),
+            scope: self.scope.clone(),
+        }
     }
 }
