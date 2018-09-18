@@ -1,32 +1,12 @@
-fun makeCount() {
-  var i = 0;
-
-  fun count() {
-    var tmp = i;
-    i = i + 1;
-    return tmp;
+var a = "global";
+{
+  fun showA() {
+    print a;
   }
 
-  return count;
+  showA();
+  var a = "block";
+  showA();
 }
 
-var count = makeCount();
-
-print count();
-print count();
-print count();
-print count();
-
-fun makePoint(x, y) {
-  fun closure(method) {
-    if (method == "x") return x;
-    if (method == "y") return y;
-    print "unknown method " + method;
-  }
-
-  return closure;
-}
-
-var point = makePoint(2, 3);
-print point("x"); // "2".
-print point("y"); // "3".
+var a = "foo";

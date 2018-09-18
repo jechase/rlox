@@ -4,14 +4,14 @@ use std::sync::Arc;
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-    Assign(Token, Arc<Expr>),
+    Assign(Token, Arc<Expr>, Option<usize>),
     Binary(Arc<Expr>, Token, Arc<Expr>),
     Call(Arc<Expr>, Token, Vec<Expr>),
     Grouping(Arc<Expr>),
     Literal(Primitive),
     Logical(Arc<Expr>, Token, Arc<Expr>),
     Unary(Token, Arc<Expr>),
-    Variable(Token),
+    Variable(Token, Option<usize>),
 }
 
 pub trait Visitor<T> {

@@ -251,8 +251,8 @@ where
             let equals = self.previous().clone();
             let value = self.assignment()?;
 
-            if let Expr::Variable(name) = expr {
-                return Ok(Expr::Assign(name, value.into()));
+            if let Expr::Variable(name, depth) = expr {
+                return Ok(Expr::Assign(name, value.into(), depth));
             }
 
             return Err(LoxError::parse(&equals, "Invalid assignment target."));
@@ -404,7 +404,7 @@ where
             self.consume(TokenType::RightParen, "expect ) after expression.")?;
             Expr::Grouping(expr.into())
         } else if self.is_match(&[TokenType::Identifier]) {
-            Expr::Variable(self.previous().clone())
+            Expr::Variable(self.previous().clone(), None)
         } else {
             return Err(LoxError::parse(self.peek(), "expect expression"));
         })

@@ -18,12 +18,20 @@ impl Interpreter {
         self.visit(stmt)
     }
 
-    pub fn assign(
+    pub fn assign_at(
         &mut self,
         name: &Token,
         value: Value,
+        depth: Option<usize>,
     ) -> Result<(), LoxError> {
-        if self.environment.assign(&name.lexeme, value).is_none() {
+        let res = if let Some(depth) = depth {
+            self.environment
+                .ancestor(depth)
+                .and_then(|mut e| e.assign(&name.lexeme, value))
+        } else {
+            self.environment.assign_global(&name.lexeme, value)
+        };
+        if res.is_none() {
             Err(LoxError::runtime(
                 name,
                 format!("variable {} is not defined", name.lexeme),
@@ -37,8 +45,16 @@ impl Interpreter {
         self.environment.define(name.lexeme.clone(), value)
     }
 
-    pub fn get_var(&mut self, name: &Token) -> Option<Value> {
-        self.environment.get(&name.lexeme)
+    pub fn get_var_at(
+        &mut self,
+        name: &Token,
+        depth: Option<usize>,
+    ) -> Option<Value> {
+        if let Some(depth) = depth {
+            self.environment.ancestor(depth).and_then(|e| e.get(&name.lexeme))
+        } else {
+            self.environment.get_global(&name.lexeme)
+        }
     }
 }
 
@@ -47,9 +63,9 @@ impl<'a, 's> Visitor<&'a Expr> for Interpreter {
 
     fn visit(&mut self, expr: &'a Expr) -> Self::Output {
         Ok(match expr {
-            Expr::Assign(name, value) => {
+            Expr::Assign(name, value, depth) => {
                 let value = self.evaluate(&*value)?;
-                self.assign(&name, value.clone())?;
+                self.assign_at(&name, value.clone(), *depth)?;
                 value
             },
             Expr::Binary(left, op, right) => {
@@ -167,8 +183,8 @@ impl<'a, 's> Visitor<&'a Expr> for Interpreter {
                 }
                 .into()
             },
-            Expr::Variable(name) => self
-                .get_var(&name)
+            Expr::Variable(name, depth) => self
+                .get_var_at(&name, *depth)
                 .ok_or_else(|| {
                     LoxError::runtime(
                         &name,

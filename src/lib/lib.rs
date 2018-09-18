@@ -1,5 +1,6 @@
 #![feature(nll)]
 #![recursion_limit = "1024"]
+#![feature(transpose_result)]
 
 mod ast;
 mod callable;
@@ -7,6 +8,7 @@ mod error;
 mod interpreter;
 mod parser;
 mod print_ast;
+mod resolver;
 mod scanner;
 mod scope;
 mod token;
@@ -20,6 +22,7 @@ use self::{
     interpreter::*,
     parser::*,
     print_ast::*,
+    resolver::*,
     scanner::*,
     scope::*,
     token::*,
@@ -75,7 +78,11 @@ pub fn run(interpreter: &mut Interpreter, source: &str) -> Result<(), Error> {
 
     let scanner = scanner_reporter.filter(scan(source));
 
-    let parser = parser_reporter.filter(Parser::new(scanner));
+    let mut resolver = Resolver::new();
+    let parser = parser_reporter
+        .filter(Parser::new(scanner).map(|parse_res| {
+            parse_res.and_then(|stmt| resolver.analyze(stmt))
+        }));
 
     let stmts: Vec<_> = parser.collect();
 

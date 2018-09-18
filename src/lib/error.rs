@@ -117,7 +117,7 @@ impl LoxError {
         let loc = if token.ty == TokenType::Eof {
             " at end".into()
         } else {
-            format!(" at {:?}", token.lexeme)
+            format!(" at \"{}\"", token.lexeme)
         };
         LoxError::Parse(token.line, loc, msg.into())
     }
