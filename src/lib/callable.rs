@@ -1,12 +1,14 @@
 use crate::*;
 
+use either::Either;
+
 use std::{
     fmt::{
         self,
         Debug,
         Display,
     },
-    sync::Arc,
+    rc::Rc,
 };
 
 pub trait Callable: Debug + Display {
@@ -59,32 +61,38 @@ where
     }
 }
 
-impl<'c, F> From<RustFn<F>> for Arc<dyn Callable>
+impl<'c, F> From<RustFn<F>> for Rc<dyn Callable>
 where
     F: Fn(&mut Interpreter, Vec<Value>) -> Result<Value, LoxError> + 'static,
 {
-    fn from(other: RustFn<F>) -> Arc<dyn Callable> {
-        Arc::new(other) as Arc<_>
+    fn from(other: RustFn<F>) -> Rc<dyn Callable> {
+        Rc::new(other) as Rc<_>
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LoxFn {
+    fn_static: Rc<FnStatic>,
+    closure:   Environment,
+}
+
+#[derive(Debug)]
+struct FnStatic {
     name:    Token,
     params:  Vec<Token>,
     body:    Vec<Stmt>,
-    closure: Environment,
+    is_init: bool,
 }
 
 impl Display for LoxFn {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<fn {}>", self.name.lexeme)
+        write!(f, "<fn {}>", self.fn_static.name.lexeme)
     }
 }
 
-impl From<LoxFn> for Arc<dyn Callable> {
+impl From<LoxFn> for Rc<dyn Callable> {
     fn from(other: LoxFn) -> Self {
-        Arc::new(other) as _
+        Rc::new(other) as _
     }
 }
 
@@ -94,11 +102,25 @@ impl LoxFn {
         params: &[Token],
         body: &[Stmt],
         closure: Environment,
+        is_init: bool,
     ) -> Self {
         LoxFn {
-            name: name.clone(),
-            params: params.into(),
-            body: body.into(),
+            fn_static: FnStatic {
+                name: name.clone(),
+                params: params.into(),
+                body: body.into(),
+                is_init,
+            }
+            .into(),
+            closure,
+        }
+    }
+
+    pub fn bind(&self, this: LoxInstance) -> LoxFn {
+        let mut closure = Environment::with_enclosing(&self.closure);
+        closure.define("this", Value::Instance(this));
+        LoxFn {
+            fn_static: self.fn_static.clone(),
             closure,
         }
     }
@@ -112,16 +134,95 @@ impl Callable for LoxFn {
     ) -> Result<Value, LoxError> {
         let env = Environment::with_enclosing(&self.closure);
         let res = interp.with_env(env, |interp| {
-            for (i, decl_param) in self.params.iter().enumerate() {
+            for (i, decl_param) in self.fn_static.params.iter().enumerate() {
                 interp.define(decl_param, args[i].clone());
             }
 
-            interp.execute_block(&self.body)
+            interp.execute_block(&self.fn_static.body)
         });
-        res.map(|opt| opt.unwrap_or(Primitive::Nil.into()))
+
+        if self.fn_static.is_init {
+            if let Some(this) = self.closure.get_at("this".as_bytes(), 0) {
+                return Ok(this);
+            }
+        }
+
+        res.map(|opt| opt.unwrap_or_else(|| Primitive::Nil.into()))
     }
 
     fn arity(&self) -> usize {
-        self.params.len()
+        self.fn_static.params.len()
+    }
+}
+
+impl<T, U> Callable for Either<T, U>
+where
+    T: Callable,
+    U: Callable,
+{
+    fn call(
+        &self,
+        interp: &mut Interpreter,
+        args: Vec<Value>,
+    ) -> Result<Value, LoxError> {
+        match self {
+            Either::Right(c) => c.call(interp, args),
+            Either::Left(c) => c.call(interp, args),
+        }
+    }
+
+    fn arity(&self) -> usize {
+        match self {
+            Either::Right(c) => c.arity(),
+            Either::Left(c) => c.arity(),
+        }
+    }
+}
+
+impl<T> Callable for &T
+where
+    T: Callable,
+{
+    fn call(
+        &self,
+        interp: &mut Interpreter,
+        args: Vec<Value>,
+    ) -> Result<Value, LoxError> {
+        (*self).call(interp, args)
+    }
+
+    fn arity(&self) -> usize {
+        (*self).arity()
+    }
+}
+
+impl Callable for Rc<dyn Callable> {
+    fn call(
+        &self,
+        interp: &mut Interpreter,
+        args: Vec<Value>,
+    ) -> Result<Value, LoxError> {
+        (**self).call(interp, args)
+    }
+
+    fn arity(&self) -> usize {
+        (**self).arity()
+    }
+}
+
+impl<T> Callable for Rc<T>
+where
+    T: Callable,
+{
+    fn call(
+        &self,
+        interp: &mut Interpreter,
+        args: Vec<Value>,
+    ) -> Result<Value, LoxError> {
+        (**self).call(interp, args)
+    }
+
+    fn arity(&self) -> usize {
+        (**self).arity()
     }
 }

@@ -1,16 +1,19 @@
 use crate::*;
 
-use std::sync::Arc;
+use std::rc::Rc;
 
 #[derive(Debug, Clone)]
 pub enum Expr {
-    Assign(Token, Arc<Expr>, Option<usize>),
-    Binary(Arc<Expr>, Token, Arc<Expr>),
-    Call(Arc<Expr>, Token, Vec<Expr>),
-    Grouping(Arc<Expr>),
+    Assign(Token, Rc<Expr>, Option<usize>),
+    Binary(Rc<Expr>, Token, Rc<Expr>),
+    Call(Rc<Expr>, Token, Vec<Expr>),
+    Get(Rc<Expr>, Token),
+    Grouping(Rc<Expr>),
     Literal(Primitive),
-    Logical(Arc<Expr>, Token, Arc<Expr>),
-    Unary(Token, Arc<Expr>),
+    Logical(Rc<Expr>, Token, Rc<Expr>),
+    Set(Rc<Expr>, Token, Rc<Expr>),
+    This(Token, Option<usize>),
+    Unary(Token, Rc<Expr>),
     Variable(Token, Option<usize>),
 }
 
@@ -34,11 +37,12 @@ where
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Block(Vec<Stmt>),
+    Class(Token, Vec<Stmt>),
     Expr(Expr),
     Function(Token, Vec<Token>, Vec<Stmt>),
-    If(Expr, Arc<Stmt>, Option<Arc<Stmt>>),
+    If(Expr, Rc<Stmt>, Option<Rc<Stmt>>),
     Print(Expr),
-    Return(Token, Expr),
+    Return(Token, Option<Expr>),
     Var(Token, Expr),
-    While(Expr, Arc<Stmt>),
+    While(Expr, Rc<Stmt>),
 }

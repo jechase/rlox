@@ -1,6 +1,6 @@
 use crate::*;
 
-use std::sync::Arc;
+use std::rc::Rc;
 
 pub struct Parser<S>
 where
@@ -35,6 +35,8 @@ where
     fn declaration(&mut self) -> Result<Stmt, LoxError> {
         let result = if self.is_match(&[TokenType::Fun]) {
             self.function("function")
+        } else if self.is_match(&[TokenType::Class]) {
+            self.class_declaration()
         } else if self.is_match(&[TokenType::Var]) {
             self.var_declaration()
         } else {
@@ -46,6 +48,21 @@ where
         }
 
         result
+    }
+
+    fn class_declaration(&mut self) -> Result<Stmt, LoxError> {
+        let name =
+            self.consume(TokenType::Identifier, "expect class name")?.clone();
+        self.consume(TokenType::LeftBrace, "expect '{{' before class body")?;
+
+        let mut methods = vec![];
+        while !self.check(&[TokenType::RightBrace]) && !self.is_at_end() {
+            methods.push(self.function("method")?);
+        }
+
+        self.consume(TokenType::RightBrace, "expect '}}' after class body")?;
+
+        Ok(Stmt::Class(name, methods))
     }
 
     fn function(&mut self, kind: &str) -> Result<Stmt, LoxError> {
@@ -133,12 +150,17 @@ where
         let keyword = self.previous().clone();
 
         let expr = if !self.is_match(&[TokenType::Semicolon]) {
-            self.expression()?
+            Some(self.expression()?)
         } else {
-            Expr::Literal(().into())
+            None
         };
 
-        self.consume(TokenType::Semicolon, "expect ';' after return value")?;
+        if expr.is_some() {
+            self.consume(
+                TokenType::Semicolon,
+                "expect ';' after return value",
+            )?;
+        }
 
         Ok(Stmt::Return(keyword, expr))
     }
@@ -251,11 +273,17 @@ where
             let equals = self.previous().clone();
             let value = self.assignment()?;
 
-            if let Expr::Variable(name, depth) = expr {
-                return Ok(Expr::Assign(name, value.into(), depth));
-            }
-
-            return Err(LoxError::parse(&equals, "Invalid assignment target."));
+            return match expr {
+                Expr::Variable(name, depth) => {
+                    Ok(Expr::Assign(name, value.into(), depth))
+                },
+                Expr::Get(object, name) => {
+                    Ok(Expr::Set(object, name, value.into()))
+                },
+                _ => {
+                    Err(LoxError::parse(&equals, "Invalid assignment target."))
+                },
+            };
         }
 
         Ok(expr)
@@ -295,7 +323,7 @@ where
         while self.is_match(&[TokenType::BangEqual, TokenType::EqualEqual]) {
             let op = self.previous().clone();
             let right = self.expression()?;
-            expr = Expr::Binary(Arc::new(expr), op, Arc::new(right))
+            expr = Expr::Binary(Rc::new(expr), op, Rc::new(right))
         }
 
         Ok(expr)
@@ -358,6 +386,12 @@ where
         loop {
             if self.is_match(&[TokenType::LeftParen]) {
                 expr = self.finish_call(expr)?;
+            } else if self.is_match(&[TokenType::Dot]) {
+                let name = self.consume(
+                    TokenType::Identifier,
+                    "expect property name after '.'",
+                )?;
+                expr = Expr::Get(expr.into(), name.clone());
             } else {
                 break;
             }
@@ -397,6 +431,8 @@ where
             Expr::Literal(Primitive::Bool(true))
         } else if self.is_match(&[TokenType::Nil]) {
             Expr::Literal(Primitive::Nil)
+        } else if self.is_match(&[TokenType::This]) {
+            Expr::This(self.previous().clone(), None)
         } else if self.is_match(&[TokenType::Number, TokenType::String]) {
             Expr::Literal(self.previous().literal.clone())
         } else if self.is_match(&[TokenType::LeftParen]) {

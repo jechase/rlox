@@ -1,14 +1,19 @@
 use crate::*;
 
+use either::Either;
+
 use std::{
     fmt,
-    sync::Arc,
+    rc::Rc,
 };
 
 #[derive(Debug, Clone)]
 pub enum Value {
     Primitive(Primitive),
-    Callable(Arc<dyn Callable>),
+    LoxFn(Rc<LoxFn>),
+    RustFn(Rc<dyn Callable>),
+    Class(Rc<LoxClass>),
+    Instance(LoxInstance),
 }
 
 impl From<Primitive> for Value {
@@ -53,7 +58,10 @@ impl PartialEq<Value> for Value {
     fn eq(&self, right: &Value) -> bool {
         match (self, right) {
             (Value::Primitive(l), Value::Primitive(r)) => r == l,
-            (Value::Callable(l), Value::Callable(r)) => Arc::ptr_eq(l, r),
+            (Value::RustFn(l), Value::RustFn(r)) => Rc::ptr_eq(l, r),
+            (Value::LoxFn(l), Value::LoxFn(r)) => Rc::ptr_eq(l, r),
+            (Value::Class(l), Value::Class(r)) => Rc::ptr_eq(l, r),
+            (Value::Instance(l), Value::Instance(r)) => l == r,
             _ => false,
         }
     }
@@ -81,11 +89,15 @@ impl fmt::Display for Primitive {
         }
     }
 }
+
 impl fmt::Display for Value {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Value::Primitive(p) => p.fmt(f),
-            Value::Callable(c) => write!(f, "{:?}", c),
+            Value::RustFn(c) => c.fmt(f),
+            Value::LoxFn(c) => c.fmt(f),
+            Value::Class(c) => c.fmt(f),
+            Value::Instance(i) => i.fmt(f),
         }
     }
 }
@@ -110,5 +122,20 @@ impl Primitive {
 
 impl Value {
     cast_fn!(primitive, Value, Primitive, Primitive);
-    cast_fn!(callable, Value, Callable, Arc<dyn Callable>);
+
+    pub fn callable<'s>(&'s self) -> Result<impl Callable + 's, LoxError> {
+        Ok(match self {
+            Value::RustFn(inner) => Either::Left(Either::Left(inner)),
+            Value::LoxFn(inner) => Either::Left(Either::Right(inner)),
+            Value::Class(inner) => {
+                Either::Right(Either::Left::<_, Rc<dyn Callable>>(inner))
+            },
+            _ => {
+                return Err(LoxError::typecast(format!(
+                "cast failed, expecting class or function, actually is {:?}",
+                self
+            )))
+            },
+        })
+    }
 }

@@ -1,6 +1,6 @@
 use std::{
     collections::HashMap,
-    sync::Arc,
+    rc::Rc,
 };
 
 use crate::*;
@@ -9,12 +9,21 @@ use crate::*;
 enum FunctionType {
     None,
     Function,
+    Method,
+    Initializer,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum ClassType {
+    None,
+    Class,
 }
 
 #[derive(Debug)]
 pub struct Resolver {
-    scopes:   Vec<HashMap<String, bool>>,
+    scopes:   Vec<HashMap<LoxStr, bool>>,
     function: FunctionType,
+    class:    ClassType,
 }
 
 impl Resolver {
@@ -22,6 +31,7 @@ impl Resolver {
         Resolver {
             scopes:   vec![Default::default()],
             function: FunctionType::None,
+            class:    ClassType::None,
         }
     }
 
@@ -64,7 +74,7 @@ impl Resolver {
         self.scopes
             .last_mut()
             .map(|scope| {
-                if scope.contains_key(name.lexeme.as_ref()) {
+                if scope.contains_key(&name.lexeme) {
                     return Err(LoxError::parse(
                     name,
                     "variable with this name already declared in this scope",
@@ -80,13 +90,13 @@ impl Resolver {
     fn define(&mut self, name: &Token) {
         self.scopes
             .last_mut()
-            .and_then(|scope| scope.get_mut(name.lexeme.as_ref()))
+            .and_then(|scope| scope.get_mut(&name.lexeme))
             .map(|entry| *entry = true);
     }
 
     fn resolve_local(&mut self, name: &Token, depth: &mut Option<usize>) {
         for (i, scope) in self.scopes.iter().rev().enumerate() {
-            if scope.contains_key(name.lexeme.as_ref()) {
+            if scope.contains_key(&name.lexeme) {
                 *depth = Some(i);
             }
         }
@@ -100,6 +110,17 @@ impl Resolver {
         self.function = function;
         let res = f(self);
         self.function = enclosing;
+        res
+    }
+
+    fn with_class<F, T>(&mut self, class: ClassType, f: F) -> T
+    where
+        F: FnOnce(&mut Resolver) -> T,
+    {
+        let enclosing = self.class;
+        self.class = class;
+        let res = f(self);
+        self.class = enclosing;
         res
     }
 
@@ -129,29 +150,43 @@ impl<'a> Visitor<&'a mut Expr> for Resolver {
     fn visit(&mut self, expr: &'a mut Expr) -> Self::Output {
         match expr {
             Expr::Assign(name, init, depth) => {
-                let init = Arc::make_mut(init);
+                let init = Rc::make_mut(init);
                 self.resolve_expr(init)?;
                 self.resolve_local(name, depth);
             },
             Expr::Binary(left, _, right) | Expr::Logical(left, _, right) => {
-                self.resolve_expr(Arc::make_mut(left))?;
-                self.resolve_expr(Arc::make_mut(right))?;
+                self.resolve_expr(Rc::make_mut(left))?;
+                self.resolve_expr(Rc::make_mut(right))?;
             },
             Expr::Call(callee, _, args) => {
-                self.resolve_expr(Arc::make_mut(callee))?;
+                self.resolve_expr(Rc::make_mut(callee))?;
                 for arg in args {
                     self.resolve_expr(arg)?;
                 }
             },
+            Expr::Get(expr, _) => {
+                self.resolve_expr(Rc::make_mut(expr))?;
+            },
             Expr::Grouping(expr) | Expr::Unary(_, expr) => {
-                self.resolve_expr(Arc::make_mut(expr))?;
+                self.resolve_expr(Rc::make_mut(expr))?;
             },
             Expr::Literal(_) => {},
+            Expr::Set(object, _, value) => {
+                self.visit(Rc::make_mut(object))?;
+                self.visit(Rc::make_mut(value))?;
+            },
+            Expr::This(tok, _) if ClassType::None == self.class => {
+                return Err(LoxError::parse(
+                    tok,
+                    "cannot use 'this' outside of a class",
+                ))
+            },
+            Expr::This(tok, depth) => self.resolve_local(tok, depth),
             Expr::Variable(name, depth) => {
                 if !self.scopes.is_empty() && !self
                     .scopes
                     .last()
-                    .and_then(|scope| scope.get(name.lexeme.as_ref()))
+                    .and_then(|scope| scope.get(&name.lexeme))
                     .map(|b| *b)
                     .unwrap_or(true)
                 {
@@ -176,6 +211,31 @@ impl<'a> Visitor<&'a mut Stmt> for Resolver {
             Stmt::Block(ref mut stmts) => {
                 self.with_scope(|resolver| resolver.resolve_all(stmts))?;
             },
+            Stmt::Class(name, methods) => {
+                self.with_class(ClassType::Class, |resolver| {
+                    resolver.declare(name)?;
+                    resolver.define(name);
+
+                    resolver.with_scope(|resolver| {
+                        resolver
+                            .scopes
+                            .last_mut()
+                            .unwrap()
+                            .insert("this".into(), true);
+                        for method in methods {
+                            if let Stmt::Function(name, params, body) = method {
+                                let decl = if &*name.lexeme == "init" {
+                                    FunctionType::Initializer
+                                } else {
+                                    FunctionType::Method
+                                };
+                                resolver.resolve_fn(params, body, decl)?;
+                            }
+                        }
+                        Ok(())
+                    })
+                })?;
+            },
             Stmt::Expr(expr) | Stmt::Print(expr) => {
                 self.resolve_expr(expr)?;
             },
@@ -187,19 +247,30 @@ impl<'a> Visitor<&'a mut Stmt> for Resolver {
             },
             Stmt::If(cond, then, otherwise) => {
                 self.resolve_expr(cond)?;
-                self.resolve(Arc::make_mut(then))?;
+                self.resolve(Rc::make_mut(then))?;
                 if let Some(otherwise) = otherwise {
-                    self.resolve(Arc::make_mut(otherwise))?;
+                    self.resolve(Rc::make_mut(otherwise))?;
                 }
             },
             Stmt::Return(kw, expr) => {
-                if let FunctionType::None = self.function {
-                    return Err(LoxError::parse(
-                        kw,
-                        "cannot return from top level",
-                    ));
+                match self.function {
+                    FunctionType::None => {
+                        return Err(LoxError::parse(
+                            kw,
+                            "cannot return from top level",
+                        ));
+                    },
+                    FunctionType::Initializer if expr.is_some() => {
+                        return Err(LoxError::parse(
+                            kw,
+                            "cannot return value from initializer",
+                        ));
+                    },
+                    _ => {},
                 }
-                self.resolve_expr(expr)?;
+                if let Some(value) = expr {
+                    self.resolve_expr(value)?;
+                }
             },
             Stmt::Var(name, value) => {
                 self.declare(name)?;
@@ -208,7 +279,7 @@ impl<'a> Visitor<&'a mut Stmt> for Resolver {
             },
             Stmt::While(cond, body) => {
                 self.resolve_expr(cond)?;
-                self.resolve(Arc::make_mut(body))?;
+                self.resolve(Rc::make_mut(body))?;
             },
         }
         Ok(())

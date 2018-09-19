@@ -1,6 +1,7 @@
 use crate::*;
 
 use std::{
+    collections::HashMap,
     mem::swap,
     time,
 };
@@ -162,6 +163,22 @@ impl<'a, 's> Visitor<&'a Expr> for Interpreter {
                 function.call(self, args)?
             },
             Expr::Grouping(e) => return self.evaluate(e),
+            Expr::Get(expr, name) => {
+                let object = self.evaluate(&*expr)?;
+                if let Value::Instance(instance) = object {
+                    instance.get(&name.lexeme).ok_or_else(|| {
+                        LoxError::runtime(
+                            name,
+                            format!("undefined field: {}", name.lexeme),
+                        )
+                    })?
+                } else {
+                    return Err(LoxError::runtime(
+                        name,
+                        "only instances have fields",
+                    ));
+                }
+            },
             Expr::Literal(v) => v.clone().into(),
             Expr::Logical(left, op, right) => {
                 let left = self.evaluate(&*left)?;
@@ -172,6 +189,22 @@ impl<'a, 's> Visitor<&'a Expr> for Interpreter {
                     _ => self.evaluate(&*right)?,
                 }
             },
+            Expr::Set(object, name, value) => {
+                let object = self.evaluate(&*object)?;
+                if let Value::Instance(instance) = object {
+                    let value = self.evaluate(&*value)?;
+                    instance.set(name.lexeme.clone(), value.clone());
+                    value
+                } else {
+                    return Err(LoxError::runtime(
+                        name,
+                        "only instances have fields",
+                    ));
+                }
+            },
+            Expr::This(this, depth) => self
+                .get_var_at(this, *depth)
+                .unwrap_or_else(|| Primitive::Nil.into()),
             Expr::Unary(op, right) => {
                 let right = self.evaluate(&*right)?;
                 match op.ty {
@@ -233,17 +266,43 @@ impl<'a, 's> Visitor<&'a Stmt> for Interpreter {
                     .with_env(new_env, |interp| interp.execute_block(stmts));
                 return res;
             },
+            Stmt::Class(name, body) => {
+                self.environment
+                    .define(name.lexeme.clone(), Primitive::Nil.into());
+                let mut methods = HashMap::new();
+                for method in body {
+                    if let Stmt::Function(name, params, body) = method {
+                        methods.insert(
+                            name.lexeme.clone(),
+                            LoxFn::new(
+                                name,
+                                params,
+                                body,
+                                self.environment.clone(),
+                                &*name.lexeme == "init",
+                            )
+                            .into(),
+                        );
+                    } else {
+                        unreachable!()
+                    }
+                }
+                let class = LoxClass::new(name.lexeme.clone(), methods);
+                self.environment
+                    .assign(&name.lexeme, Value::Class(class.into()));
+            },
             Stmt::Expr(expr) => {
                 self.evaluate(expr)?;
             },
             Stmt::Function(name, params, body) => self.define(
                 name,
-                Value::Callable(
+                Value::LoxFn(
                     LoxFn::new(
                         name,
-                        &*params,
-                        &*body,
+                        params,
+                        body,
                         self.environment.clone(),
+                        false,
                     )
                     .into(),
                 ),
@@ -259,9 +318,12 @@ impl<'a, 's> Visitor<&'a Stmt> for Interpreter {
                 println!("{}", self.evaluate(expr)?);
             },
             Stmt::Return(_, expr) => {
-                let value = self.evaluate(expr)?;
-
-                return Ok(Some(value));
+                if let Some(expr) = expr {
+                    let value = self.evaluate(expr)?;
+                    return Ok(Some(value));
+                } else {
+                    return Ok(Some(Primitive::Nil.into()));
+                }
             },
             Stmt::Var(name, expr) => {
                 let value = self.evaluate(expr)?;
@@ -293,7 +355,7 @@ impl Interpreter {
         };
         interp.environment.define(
             "clock",
-            Value::Callable(
+            Value::RustFn(
                 RustFn::new(0, |_, _| {
                     Ok(Primitive::Number(
                         time::SystemTime::now()

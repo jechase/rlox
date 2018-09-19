@@ -1,12 +1,13 @@
-var a = "global";
-{
-  fun showA() {
-    print a;
+class Foo {
+  init(a) {
+    if (a == true) {
+      print "early return";
+      return;
+    }
+    print "a is false";
+    print this;
   }
-
-  showA();
-  var a = "block";
-  showA();
 }
 
-var a = "foo";
+var foo = Foo(true);
+print foo.init(false);
