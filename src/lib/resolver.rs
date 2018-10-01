@@ -17,6 +17,7 @@ enum FunctionType {
 enum ClassType {
     None,
     Class,
+    Subclass,
 }
 
 #[derive(Debug)]
@@ -76,9 +77,9 @@ impl Resolver {
             .map(|scope| {
                 if scope.contains_key(&name.lexeme) {
                     return Err(LoxError::parse(
-                    name,
-                    "variable with this name already declared in this scope",
-                ));
+                        name,
+                        "variable with this name already declared in this scope",
+                    ));
                 }
                 scope.insert(name.lexeme.clone().into(), false);
                 Ok(())
@@ -175,11 +176,15 @@ impl<'a> Visitor<&'a mut Expr> for Resolver {
                 self.visit(Rc::make_mut(object))?;
                 self.visit(Rc::make_mut(value))?;
             },
+            Expr::Super(tok, _, _) if self.class == ClassType::Class => {
+                return Err(LoxError::parse(tok, "super used in a class with no superclass"))
+            },
+            Expr::Super(tok, _, _) if self.class == ClassType::None => {
+                return Err(LoxError::parse(tok, "super used outside of a class"))
+            },
+            Expr::Super(tok, _, depth) => self.resolve_local(tok, depth),
             Expr::This(tok, _) if ClassType::None == self.class => {
-                return Err(LoxError::parse(
-                    tok,
-                    "cannot use 'this' outside of a class",
-                ))
+                return Err(LoxError::parse(tok, "cannot use 'this' outside of a class"))
             },
             Expr::This(tok, depth) => self.resolve_local(tok, depth),
             Expr::Variable(name, depth) => {
@@ -211,29 +216,46 @@ impl<'a> Visitor<&'a mut Stmt> for Resolver {
             Stmt::Block(ref mut stmts) => {
                 self.with_scope(|resolver| resolver.resolve_all(stmts))?;
             },
-            Stmt::Class(name, methods) => {
-                self.with_class(ClassType::Class, |resolver| {
+            Stmt::Class(name, superclass, methods) => {
+                let class_type = if superclass.is_some() {
+                    ClassType::Subclass
+                } else {
+                    ClassType::Class
+                };
+                self.with_class(class_type, |resolver| {
                     resolver.declare(name)?;
+
+                    if let Some(superclass) = superclass {
+                        resolver.resolve_expr(superclass)?;
+                    }
+
                     resolver.define(name);
 
-                    resolver.with_scope(|resolver| {
-                        resolver
-                            .scopes
-                            .last_mut()
-                            .unwrap()
-                            .insert("this".into(), true);
-                        for method in methods {
-                            if let Stmt::Function(name, params, body) = method {
-                                let decl = if &*name.lexeme == "init" {
-                                    FunctionType::Initializer
-                                } else {
-                                    FunctionType::Method
-                                };
-                                resolver.resolve_fn(params, body, decl)?;
+                    let resolve_class = |resolver: &mut Resolver| {
+                        resolver.with_scope(|resolver| {
+                            resolver.scopes.last_mut().unwrap().insert("this".into(), true);
+                            for method in methods {
+                                if let Stmt::Function(name, params, body) = method {
+                                    let decl = if &*name.lexeme == "init" {
+                                        FunctionType::Initializer
+                                    } else {
+                                        FunctionType::Method
+                                    };
+                                    resolver.resolve_fn(params, body, decl)?;
+                                }
                             }
-                        }
-                        Ok(())
-                    })
+                            Ok(())
+                        })
+                    };
+
+                    if superclass.is_some() {
+                        resolver.with_scope(|resolver| {
+                            resolver.scopes.last_mut().unwrap().insert("super".into(), true);
+                            resolve_class(resolver)
+                        })
+                    } else {
+                        resolve_class(resolver)
+                    }
                 })?;
             },
             Stmt::Expr(expr) | Stmt::Print(expr) => {
@@ -255,16 +277,10 @@ impl<'a> Visitor<&'a mut Stmt> for Resolver {
             Stmt::Return(kw, expr) => {
                 match self.function {
                     FunctionType::None => {
-                        return Err(LoxError::parse(
-                            kw,
-                            "cannot return from top level",
-                        ));
+                        return Err(LoxError::parse(kw, "cannot return from top level"));
                     },
                     FunctionType::Initializer if expr.is_some() => {
-                        return Err(LoxError::parse(
-                            kw,
-                            "cannot return value from initializer",
-                        ));
+                        return Err(LoxError::parse(kw, "cannot return value from initializer"));
                     },
                     _ => {},
                 }

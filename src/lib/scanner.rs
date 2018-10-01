@@ -145,9 +145,7 @@ impl Scanner {
     where
         P: Into<Primitive>,
     {
-        let text = self
-            .source
-            .subtendril(self.start as u32, (self.current - self.start) as u32);
+        let text = self.source.subtendril(self.start as u32, (self.current - self.start) as u32);
         Token::new(ty, text, literal, self.line)
     }
 
@@ -173,10 +171,8 @@ impl Scanner {
 
         self.advance();
 
-        let value = self.source.subtendril(
-            self.start as u32 + 1,
-            (self.current - self.start) as u32 - 2,
-        );
+        let value =
+            self.source.subtendril(self.start as u32 + 1, (self.current - self.start) as u32 - 2);
 
         Ok(self.build_token(TokenType::String, Primitive::String(value)))
     }
@@ -197,9 +193,7 @@ impl Scanner {
         let text = self.source.get(self.start..self.current).unwrap();
         self.build_token(
             TokenType::Number,
-            Primitive::Number(
-                f64::from_str(text).expect(&format!("parse float: {}", text)),
-            ),
+            Primitive::Number(f64::from_str(text).expect(&format!("parse float: {}", text))),
         )
     }
 
@@ -210,8 +204,7 @@ impl Scanner {
 
         let text = self.source.get(self.start..self.current).unwrap();
 
-        let ty =
-            RESERVED_WORDS.get(text).cloned().unwrap_or(TokenType::Identifier);
+        let ty = RESERVED_WORDS.get(text).cloned().unwrap_or(TokenType::Identifier);
 
         self.build_token(ty, ())
     }

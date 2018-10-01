@@ -127,14 +127,12 @@ impl Value {
         Ok(match self {
             Value::RustFn(inner) => Either::Left(Either::Left(inner)),
             Value::LoxFn(inner) => Either::Left(Either::Right(inner)),
-            Value::Class(inner) => {
-                Either::Right(Either::Left::<_, Rc<dyn Callable>>(inner))
-            },
+            Value::Class(inner) => Either::Right(Either::Left::<_, Rc<dyn Callable>>(inner)),
             _ => {
                 return Err(LoxError::typecast(format!(
-                "cast failed, expecting class or function, actually is {:?}",
-                self
-            )))
+                    "cast failed, expecting class or function, actually is {:?}",
+                    self
+                )))
             },
         })
     }

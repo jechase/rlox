@@ -10,31 +10,36 @@ use crate::*;
 
 #[derive(Debug)]
 pub struct LoxClass {
-    pub name:    LoxStr,
-    pub methods: HashMap<LoxStr, Rc<LoxFn>>,
+    pub name:       LoxStr,
+    pub superclass: Option<Rc<LoxClass>>,
+    pub methods:    HashMap<LoxStr, Rc<LoxFn>>,
 }
 
 impl LoxClass {
-    pub fn new<S>(name: S, methods: HashMap<LoxStr, Rc<LoxFn>>) -> Self
+    pub fn new<S>(
+        name: S,
+        superclass: Option<Rc<LoxClass>>,
+        methods: HashMap<LoxStr, Rc<LoxFn>>,
+    ) -> Self
     where
         S: Into<LoxStr>,
     {
         LoxClass {
             name: name.into(),
+            superclass,
             methods,
         }
     }
 
-    pub fn find_method<K>(
-        &self,
-        instance: LoxInstance,
-        name: &K,
-    ) -> Option<Rc<LoxFn>>
+    pub fn find_method<K>(&self, instance: &LoxInstance, name: &K) -> Option<Rc<LoxFn>>
     where
         K: Eq + Hash,
         LoxStr: Borrow<K>,
     {
-        self.methods.get(name).map(move |method| Rc::new(method.bind(instance)))
+        self.methods
+            .get(name)
+            .map(|method| Rc::new(method.bind(instance.clone())))
+            .or_else(|| self.superclass.as_ref().and_then(|sc| sc.find_method(instance, name)))
     }
 }
 
@@ -45,11 +50,7 @@ impl fmt::Display for LoxClass {
 }
 
 impl Callable for Rc<LoxClass> {
-    fn call(
-        &self,
-        interp: &mut Interpreter,
-        args: Vec<Value>,
-    ) -> Result<Value, LoxError> {
+    fn call(&self, interp: &mut Interpreter, args: Vec<Value>) -> Result<Value, LoxError> {
         let instance = LoxInstance::new(self.clone());
         if let Some(init) = self.methods.get("init".as_bytes()) {
             init.bind(instance.clone()).call(interp, args)?;
@@ -58,9 +59,6 @@ impl Callable for Rc<LoxClass> {
     }
 
     fn arity(&self) -> usize {
-        self.methods
-            .get("init".as_bytes())
-            .map(|init| init.arity())
-            .unwrap_or(0)
+        self.methods.get("init".as_bytes()).map(|init| init.arity()).unwrap_or(0)
     }
 }

@@ -50,9 +50,11 @@ impl LoxInstance {
         LoxStr: Borrow<K>,
     {
         let borrowed = RefCell::borrow(&self.inner);
-        borrowed.fields.get(name).cloned().or_else(|| {
-            Some(Value::LoxFn(borrowed.class.find_method(self.clone(), name)?))
-        })
+        borrowed
+            .fields
+            .get(name)
+            .cloned()
+            .or_else(|| Some(Value::LoxFn(borrowed.class.find_method(self, name)?)))
     }
 
     pub fn set<K>(&self, name: K, value: Value) -> Option<Value>

@@ -12,6 +12,7 @@ pub enum Expr {
     Literal(Primitive),
     Logical(Rc<Expr>, Token, Rc<Expr>),
     Set(Rc<Expr>, Token, Rc<Expr>),
+    Super(Token, Token, Option<usize>),
     This(Token, Option<usize>),
     Unary(Token, Rc<Expr>),
     Variable(Token, Option<usize>),
@@ -37,7 +38,7 @@ where
 #[derive(Debug, Clone)]
 pub enum Stmt {
     Block(Vec<Stmt>),
-    Class(Token, Vec<Stmt>),
+    Class(Token, Option<Expr>, Vec<Stmt>),
     Expr(Expr),
     Function(Token, Vec<Token>, Vec<Stmt>),
     If(Expr, Rc<Stmt>, Option<Rc<Stmt>>),

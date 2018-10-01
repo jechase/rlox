@@ -24,9 +24,7 @@ impl Scope {
         LoxStr: Borrow<K>,
     {
         self.values.get(name).map(Clone::clone).or_else(|| {
-            self.enclosing
-                .as_ref()
-                .and_then(|enclosing| RefCell::borrow(enclosing).get(name))
+            self.enclosing.as_ref().and_then(|enclosing| RefCell::borrow(enclosing).get(name))
         })
     }
 
@@ -39,9 +37,7 @@ impl Scope {
             return Some(replace(self.values.get_mut(name).unwrap(), value));
         }
 
-        self.enclosing
-            .as_ref()
-            .and_then(|enclosing| enclosing.borrow_mut().assign(name, value))
+        self.enclosing.as_ref().and_then(|enclosing| enclosing.borrow_mut().assign(name, value))
     }
 
     pub fn define<K>(&mut self, name: K, value: Value)
@@ -124,11 +120,9 @@ impl Environment {
     }
 
     pub fn get_enclosing(&self) -> Option<Environment> {
-        RefCell::borrow(&self.scope).enclosing.as_ref().map(|enclosing| {
-            Environment {
-                global: self.global.clone(),
-                scope:  enclosing.clone(),
-            }
+        RefCell::borrow(&self.scope).enclosing.as_ref().map(|enclosing| Environment {
+            global: self.global.clone(),
+            scope:  enclosing.clone(),
         })
     }
 

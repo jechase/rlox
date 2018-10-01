@@ -18,7 +18,7 @@ where
 {
     let contents = read_to_string(path)?;
     let mut interpreter = Interpreter::default();
-    run(&mut interpreter, &contents)
+    run(false, &mut interpreter, &contents)
 }
 
 pub fn run_prompt() -> Result<(), Error> {
@@ -32,24 +32,23 @@ pub fn run_prompt() -> Result<(), Error> {
         write!(stdout, "> ")?;
         stdout.flush()?;
         stdin.read_line(&mut line)?;
-        if let Err(e) = run(&mut interpreter, &line) {
+        if let Err(e) = run(true, &mut interpreter, &line) {
             println!("{}", e);
         }
         line.clear();
     }
 }
 
-pub fn run(interpreter: &mut Interpreter, source: &str) -> Result<(), Error> {
+pub fn run(interactive: bool, interpreter: &mut Interpreter, source: &str) -> Result<(), Error> {
     let mut scanner_reporter = Reporter::new();
     let mut parser_reporter = Reporter::new();
 
     let scanner = scanner_reporter.filter(scan(source));
 
     let mut resolver = Resolver::new();
-    let parser = parser_reporter
-        .filter(Parser::new(scanner).map(|parse_res| {
-            parse_res.and_then(|stmt| resolver.analyze(stmt))
-        }));
+    let parser = parser_reporter.filter(
+        Parser::new(scanner).map(|parse_res| parse_res.and_then(|stmt| resolver.analyze(stmt))),
+    );
 
     let stmts: Vec<_> = parser.collect();
 
@@ -58,7 +57,7 @@ pub fn run(interpreter: &mut Interpreter, source: &str) -> Result<(), Error> {
 
     for stmt in stmts {
         match stmt {
-            Stmt::Expr(ref e) => println!("{}", interpreter.evaluate(e)?),
+            Stmt::Expr(ref e) if interactive => println!("{}", interpreter.evaluate(e)?),
             _ => {
                 interpreter.execute(&stmt)?;
             },

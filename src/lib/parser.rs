@@ -51,8 +51,15 @@ where
     }
 
     fn class_declaration(&mut self) -> Result<Stmt, LoxError> {
-        let name =
-            self.consume(TokenType::Identifier, "expect class name")?.clone();
+        let name = self.consume(TokenType::Identifier, "expect class name")?.clone();
+
+        let superclass = if self.is_match(&[TokenType::Less]) {
+            self.consume(TokenType::Identifier, "expect superclass name")?;
+            Expr::Variable(self.previous().clone(), None).into()
+        } else {
+            None
+        };
+
         self.consume(TokenType::LeftBrace, "expect '{{' before class body")?;
 
         let mut methods = vec![];
@@ -62,35 +69,21 @@ where
 
         self.consume(TokenType::RightBrace, "expect '}}' after class body")?;
 
-        Ok(Stmt::Class(name, methods))
+        Ok(Stmt::Class(name, superclass, methods))
     }
 
     fn function(&mut self, kind: &str) -> Result<Stmt, LoxError> {
-        let name = self
-            .consume(TokenType::Identifier, format!("expect {} name", kind))?
-            .clone();
-        self.consume(
-            TokenType::LeftParen,
-            format!("expect '(' after {} name", kind),
-        )?;
+        let name = self.consume(TokenType::Identifier, format!("expect {} name", kind))?.clone();
+        self.consume(TokenType::LeftParen, format!("expect '(' after {} name", kind))?;
 
         let mut params = vec![];
         if !self.check(&[TokenType::RightParen]) {
             loop {
                 if params.len() >= 8 {
-                    return Err(LoxError::runtime(
-                        self.peek(),
-                        "cannot have more than 8 paramters",
-                    ));
+                    return Err(LoxError::runtime(self.peek(), "cannot have more than 8 paramters"));
                 }
 
-                params.push(
-                    self.consume(
-                        TokenType::Identifier,
-                        "expect parameter name",
-                    )?
-                    .clone(),
-                );
+                params.push(self.consume(TokenType::Identifier, "expect parameter name")?.clone());
 
                 if !self.is_match(&[TokenType::Comma]) {
                     break;
@@ -99,10 +92,7 @@ where
         }
         self.consume(TokenType::RightParen, "expect ')' after parameters")?;
 
-        self.consume(
-            TokenType::LeftBrace,
-            format!("expect '{{' before {} body", kind),
-        )?;
+        self.consume(TokenType::LeftBrace, format!("expect '{{' before {} body", kind))?;
 
         let body = self.block()?;
 
@@ -110,9 +100,7 @@ where
     }
 
     fn var_declaration(&mut self) -> Result<Stmt, LoxError> {
-        let name = self
-            .consume(TokenType::Identifier, "expect variable name")?
-            .clone();
+        let name = self.consume(TokenType::Identifier, "expect variable name")?.clone();
 
         let init = if self.is_match(&[TokenType::Equal]) {
             self.expression()?
@@ -120,10 +108,7 @@ where
             Expr::Literal(Primitive::Nil)
         };
 
-        self.consume(
-            TokenType::Semicolon,
-            "expect ';' after variable declaration",
-        )?;
+        self.consume(TokenType::Semicolon, "expect ';' after variable declaration")?;
 
         Ok(Stmt::Var(name, init))
     }
@@ -156,10 +141,7 @@ where
         };
 
         if expr.is_some() {
-            self.consume(
-                TokenType::Semicolon,
-                "expect ';' after return value",
-            )?;
+            self.consume(TokenType::Semicolon, "expect ';' after return value")?;
         }
 
         Ok(Stmt::Return(keyword, expr))
@@ -200,8 +182,7 @@ where
         if let Some(cond) = cond {
             body = Stmt::While(cond, body.into());
         } else {
-            body =
-                Stmt::While(Expr::Literal(Primitive::Bool(true)), body.into());
+            body = Stmt::While(Expr::Literal(Primitive::Bool(true)), body.into());
         }
 
         if let Some(decl) = decl {
@@ -214,10 +195,7 @@ where
     fn while_statement(&mut self) -> Result<Stmt, LoxError> {
         self.consume(TokenType::LeftParen, "expect '(' after 'while'")?;
         let cond = self.expression()?;
-        self.consume(
-            TokenType::RightParen,
-            "expect ')' after while condition",
-        )?;
+        self.consume(TokenType::RightParen, "expect ')' after while condition")?;
         let body = self.statement()?;
         Ok(Stmt::While(cond, body.into()))
     }
@@ -274,15 +252,9 @@ where
             let value = self.assignment()?;
 
             return match expr {
-                Expr::Variable(name, depth) => {
-                    Ok(Expr::Assign(name, value.into(), depth))
-                },
-                Expr::Get(object, name) => {
-                    Ok(Expr::Set(object, name, value.into()))
-                },
-                _ => {
-                    Err(LoxError::parse(&equals, "Invalid assignment target."))
-                },
+                Expr::Variable(name, depth) => Ok(Expr::Assign(name, value.into(), depth)),
+                Expr::Get(object, name) => Ok(Expr::Set(object, name, value.into())),
+                _ => Err(LoxError::parse(&equals, "Invalid assignment target.")),
             };
         }
 
@@ -387,10 +359,7 @@ where
             if self.is_match(&[TokenType::LeftParen]) {
                 expr = self.finish_call(expr)?;
             } else if self.is_match(&[TokenType::Dot]) {
-                let name = self.consume(
-                    TokenType::Identifier,
-                    "expect property name after '.'",
-                )?;
+                let name = self.consume(TokenType::Identifier, "expect property name after '.'")?;
                 expr = Expr::Get(expr.into(), name.clone());
             } else {
                 break;
@@ -406,10 +375,7 @@ where
         if !self.check(&[TokenType::RightParen]) {
             loop {
                 if args.len() >= 8 {
-                    return Err(LoxError::parse(
-                        self.peek(),
-                        "cannot have more than 8 arguments",
-                    ));
+                    return Err(LoxError::parse(self.peek(), "cannot have more than 8 arguments"));
                 }
                 args.push(self.expression()?);
                 if !self.is_match(&[TokenType::Comma]) {
@@ -418,8 +384,7 @@ where
             }
         }
 
-        let paren =
-            self.consume(TokenType::RightParen, "expect ')' after arguments")?;
+        let paren = self.consume(TokenType::RightParen, "expect ')' after arguments")?;
 
         Ok(Expr::Call(callee.into(), paren.clone(), args))
     }
@@ -431,6 +396,11 @@ where
             Expr::Literal(Primitive::Bool(true))
         } else if self.is_match(&[TokenType::Nil]) {
             Expr::Literal(Primitive::Nil)
+        } else if self.is_match(&[TokenType::Super]) {
+            let keyword = self.previous().clone();
+            self.consume(TokenType::Dot, "expect '.' after 'super'")?;
+            let method = self.consume(TokenType::Identifier, "expect method name")?.clone();
+            Expr::Super(keyword, method, None)
         } else if self.is_match(&[TokenType::This]) {
             Expr::This(self.previous().clone(), None)
         } else if self.is_match(&[TokenType::Number, TokenType::String]) {

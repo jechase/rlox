@@ -12,11 +12,7 @@ use std::{
 };
 
 pub trait Callable: Debug + Display {
-    fn call(
-        &self,
-        interp: &mut Interpreter,
-        args: Vec<Value>,
-    ) -> Result<Value, LoxError>;
+    fn call(&self, interp: &mut Interpreter, args: Vec<Value>) -> Result<Value, LoxError>;
 
     fn arity(&self) -> usize;
 }
@@ -48,11 +44,7 @@ impl<'c, F> Callable for RustFn<F>
 where
     F: Fn(&mut Interpreter, Vec<Value>) -> Result<Value, LoxError>,
 {
-    fn call(
-        &self,
-        interp: &mut Interpreter,
-        args: Vec<Value>,
-    ) -> Result<Value, LoxError> {
+    fn call(&self, interp: &mut Interpreter, args: Vec<Value>) -> Result<Value, LoxError> {
         (self.1)(interp, args)
     }
 
@@ -127,11 +119,7 @@ impl LoxFn {
 }
 
 impl Callable for LoxFn {
-    fn call(
-        &self,
-        interp: &mut Interpreter,
-        args: Vec<Value>,
-    ) -> Result<Value, LoxError> {
+    fn call(&self, interp: &mut Interpreter, args: Vec<Value>) -> Result<Value, LoxError> {
         let env = Environment::with_enclosing(&self.closure);
         let res = interp.with_env(env, |interp| {
             for (i, decl_param) in self.fn_static.params.iter().enumerate() {
@@ -160,11 +148,7 @@ where
     T: Callable,
     U: Callable,
 {
-    fn call(
-        &self,
-        interp: &mut Interpreter,
-        args: Vec<Value>,
-    ) -> Result<Value, LoxError> {
+    fn call(&self, interp: &mut Interpreter, args: Vec<Value>) -> Result<Value, LoxError> {
         match self {
             Either::Right(c) => c.call(interp, args),
             Either::Left(c) => c.call(interp, args),
@@ -183,11 +167,7 @@ impl<T> Callable for &T
 where
     T: Callable,
 {
-    fn call(
-        &self,
-        interp: &mut Interpreter,
-        args: Vec<Value>,
-    ) -> Result<Value, LoxError> {
+    fn call(&self, interp: &mut Interpreter, args: Vec<Value>) -> Result<Value, LoxError> {
         (*self).call(interp, args)
     }
 
@@ -197,11 +177,7 @@ where
 }
 
 impl Callable for Rc<dyn Callable> {
-    fn call(
-        &self,
-        interp: &mut Interpreter,
-        args: Vec<Value>,
-    ) -> Result<Value, LoxError> {
+    fn call(&self, interp: &mut Interpreter, args: Vec<Value>) -> Result<Value, LoxError> {
         (**self).call(interp, args)
     }
 
@@ -214,11 +190,7 @@ impl<T> Callable for Rc<T>
 where
     T: Callable,
 {
-    fn call(
-        &self,
-        interp: &mut Interpreter,
-        args: Vec<Value>,
-    ) -> Result<Value, LoxError> {
+    fn call(&self, interp: &mut Interpreter, args: Vec<Value>) -> Result<Value, LoxError> {
         (**self).call(interp, args)
     }
 

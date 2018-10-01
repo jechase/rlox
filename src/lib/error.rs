@@ -64,10 +64,7 @@ where
         self.errors.push(error);
     }
 
-    pub fn filter<'s, 'i, 'r, I, T>(
-        &'s mut self,
-        i: I,
-    ) -> impl Iterator<Item = T> + 'r
+    pub fn filter<'s, 'i, 'r, I, T>(&'s mut self, i: I) -> impl Iterator<Item = T> + 'r
     where
         I: IntoIterator<Item = Result<T, E>> + 'i,
         'i: 'r,
