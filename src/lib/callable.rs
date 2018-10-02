@@ -77,14 +77,15 @@ where
 
 #[derive(Debug)]
 pub struct LoxFn {
-    name:   Token,
-    params: Vec<Token>,
-    body:   Vec<Stmt>,
+    name:    Token,
+    params:  Vec<Token>,
+    body:    Vec<Stmt>,
+    closure: Option<Index>,
 }
 
 impl Display for LoxFn {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "<function>")
+        write!(f, "<fn {}>", self.name.lexeme)
     }
 }
 
@@ -95,11 +96,17 @@ impl From<LoxFn> for Arc<dyn Callable> {
 }
 
 impl LoxFn {
-    pub fn new(name: &Token, params: &[Token], body: &[Stmt]) -> Self {
+    pub fn new(
+        name: &Token,
+        params: &[Token],
+        body: &[Stmt],
+        closure: Option<Index>,
+    ) -> Self {
         LoxFn {
-            name:   name.clone(),
+            name: name.clone(),
             params: params.into(),
-            body:   body.into(),
+            body: body.into(),
+            closure,
         }
     }
 }
@@ -110,7 +117,7 @@ impl Callable for LoxFn {
         interp: &mut Interpreter,
         args: Vec<Value>,
     ) -> Result<Value, LoxError> {
-        let env = interp.environment.create_scope(None);
+        let env = interp.environment.create_scope(self.closure);
         let res = interp.with_env(env, |interp| {
             for (i, decl_param) in self.params.iter().enumerate() {
                 interp.define(decl_param, args[i].clone());

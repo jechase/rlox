@@ -56,14 +56,7 @@ impl ScopeMgr {
     }
 
     pub fn destroy_scope(&mut self, index: Index) -> Option<Index> {
-        let mut needs_remove = false;
-
-        if let Some(scope) = self.scopes.get_mut(index) {
-            scope.children -= 1;
-            needs_remove = scope.children == 0;
-        }
-
-        if needs_remove {
+        if self.del_ref(index) == 0 {
             self.scopes.remove(index).and_then(|old| {
                 old.enclosing.map(|parent| self.destroy_scope(parent));
                 old.enclosing
@@ -146,7 +139,8 @@ impl ScopeMgr {
         match scope {
             None => &self.global,
             Some(idx) => self.get_scope(idx),
-        }.values
+        }
+        .values
         .contains_key(name.as_ref())
     }
 
@@ -156,5 +150,17 @@ impl ScopeMgr {
 
     fn get_scope_mut(&mut self, scope: Index) -> &mut Scope {
         &mut self.scopes[scope]
+    }
+
+    pub fn add_ref(&mut self, scope: Index) -> usize {
+        let scope = self.get_scope_mut(scope);
+        scope.children += 1;
+        scope.children
+    }
+
+    pub fn del_ref(&mut self, scope: Index) -> usize {
+        let scope = self.get_scope_mut(scope);
+        scope.children -= 1;
+        scope.children
     }
 }

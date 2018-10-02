@@ -225,10 +225,15 @@ impl<'a, 's> Visitor<&'a Stmt> for Interpreter {
                 self.evaluate(expr)?;
             },
             Stmt::Function(name, params, body) => {
+                if let Some(scope) = self.current {
+                    self.environment.add_ref(scope);
+                }
                 self.define(
                     name,
-                    Value::Callable(LoxFn::new(name, &*params, &*body).into()),
-                );
+                    Value::Callable(
+                        LoxFn::new(name, &*params, &*body, self.current).into(),
+                    ),
+                )
             },
             Stmt::If(cond, then, otherwise) => {
                 if is_truthy(&self.evaluate(cond)?) {
