@@ -4,7 +4,6 @@ use std::{
     hash::Hash,
 };
 
-<<<<<<< HEAD
 use crate::*;
 
 #[derive(Default, Debug)]
@@ -20,25 +19,10 @@ impl Environment {
             ..Default::default()
         }
     }
-=======
-use crate::{
-    token::Token,
-    value::Value,
-    LoxStr,
-};
-
-#[derive(Default)]
-pub struct Environment {
-    values: HashMap<LoxStr, Value>,
-}
-
-impl Environment {
->>>>>>> 1d35dea... to_owned -> into_owned
     pub fn define(&mut self, name: &Token, value: Value) {
         self.values.insert(name.lexeme.clone(), value);
     }
 
-<<<<<<< HEAD
     pub fn assign(&mut self, name: &Token, value: Value) {
         self.get_mut(&name.lexeme).map(|opt| *opt = value);
     }
@@ -60,14 +44,10 @@ impl Environment {
     }
 
     fn get_mut<K>(&mut self, name: &K) -> Option<&mut Value>
-=======
-    pub fn get<K>(&mut self, name: &K) -> Option<&Value>
->>>>>>> 1d35dea... to_owned -> into_owned
     where
         K: Hash + Eq,
         LoxStr: Borrow<K>,
     {
-<<<<<<< HEAD
         if let Some(v) = self.values.get_mut(name) {
             return Some(v);
         }
@@ -81,8 +61,5 @@ impl Environment {
 
     pub fn into_parent(self) -> Option<Environment> {
         self.enclosing.map(|e| *e)
-=======
-        self.values.get(name)
->>>>>>> 1d35dea... to_owned -> into_owned
     }
 }
