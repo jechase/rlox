@@ -63,6 +63,31 @@ where
     pub fn report(&mut self, error: E) {
         self.errors.push(error);
     }
+
+    pub fn filter<'s, 'i, 'r, I, T>(
+        &'s mut self,
+        i: I,
+    ) -> impl Iterator<Item = T> + 'r
+    where
+        I: IntoIterator<Item = Result<T, E>> + 'i,
+        'i: 'r,
+        's: 'r,
+    {
+        i.into_iter().filter_map(move |res| match res {
+            Ok(t) => Some(t),
+            Err(e) => {
+                self.report(e);
+                None
+            },
+        })
+    }
+
+    pub fn join<T>(&mut self, mut other: Reporter<T>)
+    where
+        E: From<T>,
+    {
+        self.errors.extend(other.errors.drain(..).map(From::from));
+    }
 }
 
 #[derive(Fail, Debug, Display)]
@@ -71,6 +96,10 @@ pub enum LoxError {
     Scan(usize, String),
     #[display(fmt = "[line {}] Error{}: {}", _0, _1, _2)]
     Parse(usize, String, String),
+    #[display(fmt = "{}", _0)]
+    Cast(String),
+    #[display(fmt = "[line {}] Error: {}", _0, _1)]
+    Runtime(usize, String),
 }
 
 impl LoxError {
@@ -91,5 +120,19 @@ impl LoxError {
             format!(" at {:?}", token.lexeme)
         };
         LoxError::Parse(token.line, loc, msg.into())
+    }
+
+    pub fn runtime<S>(token: &Token, msg: S) -> LoxError
+    where
+        S: Into<String>,
+    {
+        LoxError::Runtime(token.line, msg.into())
+    }
+
+    pub fn typecast<S>(msg: S) -> LoxError
+    where
+        S: Into<String>,
+    {
+        LoxError::Cast(msg.into())
     }
 }

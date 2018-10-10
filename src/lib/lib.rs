@@ -2,6 +2,7 @@
 
 mod ast;
 mod error;
+mod interpreter;
 mod parser;
 mod print_ast;
 mod scanner;
@@ -12,6 +13,7 @@ mod value;
 use self::{
     ast::*,
     error::*,
+    interpreter::*,
     parser::*,
     print_ast::*,
     scanner::*,
@@ -58,20 +60,24 @@ pub fn run_prompt() -> Result<(), Error> {
 }
 
 pub fn run(source: &str) -> Result<(), Error> {
-    let mut reporter = Reporter::default();
-    let scanner = Scanner::new(source).filter_map(|res| match res {
-        Ok(t) => Some(t),
-        Err(e) => {
-            reporter.report(e);
-            None
-        },
-    });
-    let mut parser = Parser::new(scanner);
+    let mut scanner_reporter = Reporter::new();
+    let mut parser_reporter = Reporter::new();
 
-    match parser.parse() {
-        Ok(expr) => println!("{}", AstPrinter.visit(&expr)),
-        Err(e) => reporter.report(e),
+    let scanner = scanner_reporter.filter(Scanner::new(source));
+
+    let parser =
+        parser_reporter.filter(Some(Parser::new(scanner).parse()).into_iter());
+
+    let exprs: Vec<_> = parser.collect();
+
+    scanner_reporter.join(parser_reporter);
+    scanner_reporter.finish()?;
+
+    let mut interpreter = Interpreter;
+
+    for expr in exprs {
+        println!("{}", interpreter.interpret(&expr)?);
     }
 
-    reporter.finish().map_err(From::from)
+    Ok(())
 }
