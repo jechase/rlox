@@ -64,24 +64,6 @@ where
         self.errors.push(error);
     }
 
-    pub fn filter<'s, 'i, 'r, I, T>(
-        &'s mut self,
-        i: I,
-    ) -> impl Iterator<Item = T> + 'r
-    where
-        I: IntoIterator<Item = Result<T, E>> + 'i,
-        'i: 'r,
-        's: 'r,
-    {
-        i.into_iter().filter_map(move |res| match res {
-            Ok(t) => Some(t),
-            Err(e) => {
-                self.report(e);
-                None
-            },
-        })
-    }
-
     pub fn join<T>(&mut self, mut other: Reporter<T>)
     where
         E: From<T>,
